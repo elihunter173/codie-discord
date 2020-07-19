@@ -1,7 +1,6 @@
 mod code;
 
 use std::env;
-use std::str;
 use std::time::Duration;
 
 use serenity::client::Client;
@@ -11,9 +10,6 @@ use serenity::utils::MessageBuilder;
 
 use lazy_static::lazy_static;
 use regex::Regex;
-use tokio;
-
-use anyhow;
 
 // TODO: My error module is a little cumbersome. Maybe just use anyhow? Not as nice for user errors
 // tho. Need to read more
@@ -55,7 +51,7 @@ lazy_static! {
 
 impl Handler {
     async fn message_impl(&self, ctx: &Context, msg: &Message) -> anyhow::Result<()> {
-        log::debug!("message: {:?}", msg.content);
+        log::debug!("Responding to {:#?}", msg.content);
         let (lang, code) = match CODE_BLOCK.captures(&msg.content) {
             Some(caps) => (
                 caps.name("lang").unwrap().as_str(),
@@ -72,28 +68,23 @@ print('Hello World')
                 ).into());
             }
         };
-        log::debug!("language: {:?}, code: {:?}", lang, code);
         msg.react(&ctx, '🤖').await?;
         let output = self.runner.run_code(lang, code).await?;
         let mut reply = MessageBuilder::new();
-        if !output.status.success() {
-            reply.push_bold("EXIT STATUS: ");
-            match output.status.code() {
-                Some(code) => reply.push_line(code),
-                None => reply.push_line("terminated by signal"),
-            };
+        if !output.success() {
+            reply.push_bold("EXIT STATUS: ").push_line(output.status);
         }
         if !output.stdout.is_empty() {
             // I like to keep output simple if there's no stderr
             if !output.stderr.is_empty() {
                 reply.push_bold("STDOUT:");
             }
-            reply.push_codeblock(str::from_utf8(&output.stdout).unwrap(), None);
+            reply.push_codeblock(&output.stdout, None);
         }
         if !output.stderr.is_empty() {
             reply
                 .push_bold("STDERR:")
-                .push_codeblock(str::from_utf8(&output.stderr).unwrap(), None);
+                .push_codeblock(&output.stderr, None);
         }
         msg.channel_id.say(&ctx, reply.build()).await?;
         Ok(())
@@ -114,6 +105,7 @@ impl EventHandler for Handler {
 
         match self.message_impl(&ctx, &msg).await {
             Err(e) => {
+                log::error!("{:#?}", e);
                 msg.reply(&ctx, e).await.unwrap();
             }
             Ok(()) => {}
@@ -125,13 +117,11 @@ impl EventHandler for Handler {
 
 #[tokio::main]
 async fn main() {
-    use simple_logger;
     simple_logger::init_with_level(log::Level::Info).unwrap();
 
     // Login with a bot token from the environment
     let mut client = Client::new(&env::var("DISCORD_TOKEN").unwrap())
         .event_handler(Handler {
-            // TODO: Make it more clear what 15 is. It's timeout in seconds. Maybe with_timeout?
             runner: CodeRunner::with_timeout(Duration::from_secs(15)).await,
         })
         .await
