@@ -11,28 +11,22 @@ use serenity::utils::MessageBuilder;
 use lazy_static::lazy_static;
 use regex::Regex;
 
-// TODO: My error module is a little cumbersome. Maybe just use anyhow? Not as nice for user errors
-// tho. Need to read more
-
 use crate::code::CodeRunner;
 
 // TODO: Put this in it's own module
-// TODO: Allow generic strings
 #[derive(Debug)]
-struct UserError(String);
+struct UserError<S: AsRef<str> + fmt::Debug>(S);
 
 use std::error::Error;
 use std::fmt;
 
-// TODO: Can I have from and into called automatically?
-
-impl fmt::Display for UserError {
+impl<S: AsRef<str> + fmt::Debug> fmt::Display for UserError<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", &self.0)
+        f.write_str(self.0.as_ref())
     }
 }
 
-impl Error for UserError {
+impl<S: AsRef<str> + fmt::Debug> Error for UserError<S> {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         None
     }
@@ -43,10 +37,7 @@ struct Handler {
 }
 
 lazy_static! {
-    // TODO: Catch if someone just forgot to specify a language? Probably just involves make lang
-    // use * and report errors if it's empty
-    static ref CODE_BLOCK: Regex =
-        Regex::new(r"(?sm)```(?P<lang>\S+)\n(?P<code>.*)```").unwrap();
+    static ref CODE_BLOCK: Regex = Regex::new(r"(?sm)```(?P<lang>\S*)\n(?P<code>.*)```").unwrap();
 }
 
 impl Handler {
@@ -58,16 +49,25 @@ impl Handler {
                 caps.name("code").unwrap().as_str(),
             ),
             None => {
-                return Err(UserError(
-                    r"Were you trying to run some code? I couldn't find any code blocks in your message.
+                let message = r"Were you trying to run some code? I couldn't find any code blocks in your message.
 
 Be sure to annotate your code blocks with a language like
 \`\`\`python
 print('Hello World')
-\`\`\`".into(),
-                ).into());
+\`\`\`";
+                return Err(UserError(message).into());
             }
         };
+        if lang.is_empty() {
+            return Err(UserError(
+                    format!(r"I noticed you sent a code block but didn't include a language tag, so I don't know how to run it. The language goes immediately after the \`\`\` like so
+
+\`\`\`your-language-here
+{code}\`\`\`", code=code),
+                ).into());
+        }
+
+        log::debug!("language: {:?}, code: {:?}", lang, code);
         msg.react(&ctx, '🤖').await?;
         let output = self.runner.run_code(lang, code).await?;
         let mut reply = MessageBuilder::new();

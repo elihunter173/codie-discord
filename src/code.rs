@@ -132,7 +132,9 @@ impl CodeRunner {
                 )
                 .await
             }
-            _ => Err(crate::UserError(format!("unknown language: {}", lang)).into()),
+            _ => {
+                Err(crate::UserError(format!("I'm sorry, I don't know how to run {}", lang)).into())
+            }
         }
     }
 
