@@ -1,4 +1,4 @@
-mod code;
+mod bot;
 
 use std::env;
 use std::time::Duration;
@@ -11,7 +11,7 @@ use serenity::utils::MessageBuilder;
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::code::CodeRunner;
+use crate::bot::{Bot, Output};
 
 // TODO: Put this in it's own module
 #[derive(Debug)]
@@ -33,11 +33,31 @@ impl<S: AsRef<str> + fmt::Debug> Error for UserError<S> {
 }
 
 struct Handler {
-    runner: CodeRunner,
+    bot: Bot,
 }
 
 lazy_static! {
     static ref CODE_BLOCK: Regex = Regex::new(r"(?sm)```(?P<lang>\S*)\n(?P<code>.*)```").unwrap();
+}
+
+fn output_message(output: &Output) -> String {
+    let mut message = MessageBuilder::new();
+    if !output.success() {
+        message.push_bold("EXIT STATUS: ").push_line(output.status);
+    }
+    if !output.stdout.is_empty() {
+        // I like to keep output simple if there's no stderr
+        if !output.stderr.is_empty() {
+            message.push_bold("STDOUT:");
+        }
+        message.push_codeblock(&output.stdout, None);
+    }
+    if !output.stderr.is_empty() {
+        message
+            .push_bold("STDERR:")
+            .push_codeblock(&output.stderr, None);
+    }
+    message.build()
 }
 
 impl Handler {
@@ -50,7 +70,6 @@ impl Handler {
             ),
             None => {
                 let message = r"Were you trying to run some code? I couldn't find any code blocks in your message.
-
 Be sure to annotate your code blocks with a language like
 \`\`\`python
 print('Hello World')
@@ -61,7 +80,6 @@ print('Hello World')
         if lang.is_empty() {
             return Err(UserError(
                     format!(r"I noticed you sent a code block but didn't include a language tag, so I don't know how to run it. The language goes immediately after the \`\`\` like so
-
 \`\`\`your-language-here
 {code}\`\`\`", code=code),
                 ).into());
@@ -69,24 +87,8 @@ print('Hello World')
 
         log::debug!("language: {:?}, code: {:?}", lang, code);
         msg.react(&ctx, '🤖').await?;
-        let output = self.runner.run_code(lang, code).await?;
-        let mut reply = MessageBuilder::new();
-        if !output.success() {
-            reply.push_bold("EXIT STATUS: ").push_line(output.status);
-        }
-        if !output.stdout.is_empty() {
-            // I like to keep output simple if there's no stderr
-            if !output.stderr.is_empty() {
-                reply.push_bold("STDOUT:");
-            }
-            reply.push_codeblock(&output.stdout, None);
-        }
-        if !output.stderr.is_empty() {
-            reply
-                .push_bold("STDERR:")
-                .push_codeblock(&output.stderr, None);
-        }
-        msg.channel_id.say(&ctx, reply.build()).await?;
+        let output = self.bot.run_code(lang, code).await?;
+        msg.channel_id.say(&ctx, output_message(&output)).await?;
         Ok(())
     }
 }
@@ -99,21 +101,17 @@ impl EventHandler for Handler {
         if msg.is_own(&ctx).await {
             return;
         }
+        // TODO: Add help commands
         if !msg.mentions_me(&ctx).await.unwrap() {
             return;
         }
 
-        match self.message_impl(&ctx, &msg).await {
-            Err(e) => {
-                log::error!("{:#?}", e);
-                msg.reply(&ctx, e).await.unwrap();
-            }
-            Ok(()) => {}
+        if let Err(e) = self.message_impl(&ctx, &msg).await {
+            log::error!("{:#?}", e);
+            msg.reply(&ctx, e).await.unwrap();
         }
     }
 }
-
-// TODO: Periodically prune things maybe? Probably not
 
 #[tokio::main]
 async fn main() {
@@ -122,7 +120,7 @@ async fn main() {
     // Login with a bot token from the environment
     let mut client = Client::new(&env::var("DISCORD_TOKEN").unwrap())
         .event_handler(Handler {
-            runner: CodeRunner::with_timeout(Duration::from_secs(15)).await,
+            bot: Bot::new(Duration::from_secs(30), 1.0, 128 * 1024 * 1024).await,
         })
         .await
         .unwrap();
