@@ -70,6 +70,7 @@ impl Handler {
             ),
             None => {
                 let message = r"Were you trying to run some code? I couldn't find any code blocks in your message.
+
 Be sure to annotate your code blocks with a language like
 \`\`\`python
 print('Hello World')
@@ -80,6 +81,7 @@ print('Hello World')
         if lang.is_empty() {
             return Err(UserError(
                     format!(r"I noticed you sent a code block but didn't include a language tag, so I don't know how to run it. The language goes immediately after the \`\`\` like so
+
 \`\`\`your-language-here
 {code}\`\`\`", code=code),
                 ).into());
@@ -96,19 +98,49 @@ print('Hello World')
 #[serenity::async_trait]
 impl EventHandler for Handler {
     async fn message(&self, ctx: Context, msg: Message) {
-        // TODO: Have a command for help on supported languages, on particular languages and, stuff
-        // like that
         if msg.is_own(&ctx).await {
             return;
         }
-        // TODO: Add help commands
-        if !msg.mentions_me(&ctx).await.unwrap() {
-            return;
-        }
 
-        if let Err(e) = self.message_impl(&ctx, &msg).await {
-            log::error!("{:#?}", e);
-            msg.reply(&ctx, e).await.unwrap();
+        log::debug!("{}", msg.content);
+
+        // TODO: Extract commands to be separate from the handler
+        // TODO: Handle extract this out. Use some sort of macro to define commands in a framework
+        // style
+        // TODO: Get suggestsions when you make a typo on a command using strsim
+        match msg.content.split(' ').collect::<Vec<_>>().as_slice() {
+            ["#!help"] => {
+                msg.channel_id.say(&ctx, self.bot.help()).await.unwrap();
+            }
+            ["#!languages"] => {
+                msg.channel_id
+                    .say(&ctx, self.bot.help_languages())
+                    .await
+                    .unwrap();
+            }
+            ["#!help", lang] => match self.bot.help_lang(lang) {
+                Some(help) => {
+                    msg.channel_id.say(&ctx, help).await.unwrap();
+                }
+                None => {
+                    msg.reply(&ctx, format!("I'm sorry. I don't know `{}`.", lang))
+                        .await
+                        .unwrap();
+                }
+            },
+            _ => {
+                if msg.is_private() || msg.mentions_me(&ctx).await.unwrap() {
+                    if let Err(e) = self.message_impl(&ctx, &msg).await {
+                        log::error!("{:#?}", e);
+                        msg.reply(&ctx, e).await.unwrap();
+                    }
+                }
+                if msg.content.starts_with("#!") {
+                    msg.reply(&ctx, "I'm sorry. I didn't recognize that command")
+                        .await
+                        .unwrap();
+                }
+            }
         }
     }
 }
