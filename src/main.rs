@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use serenity::client::Client;
 use serenity::model::channel::Message;
+use serenity::model::guild::Guild;
 use serenity::prelude::{Context, EventHandler};
 use serenity::utils::MessageBuilder;
 
@@ -141,6 +142,48 @@ impl EventHandler for Handler {
                         .unwrap();
                 }
             }
+        }
+    }
+
+    async fn guild_create(&self, ctx: Context, guild: Guild, is_new: bool) {
+        if !is_new {
+            return;
+        }
+
+        // Lower position number is top Find a channel I can send messages in. I couldn't get
+        // streams/iterators to work so I had to resort to this code. I know it's messy :(
+        let channel = {
+            let me = ctx.cache.current_user_id().await;
+            use serenity::model::channel::ChannelType;
+            let text_channels = guild
+                .channels
+                .values()
+                .filter(|chan| chan.kind == ChannelType::Text);
+
+            let mut cur_top = None;
+            for chan in text_channels {
+                let can_send_messages = chan
+                    .permissions_for_user(&ctx, me)
+                    .await
+                    .unwrap()
+                    .send_messages();
+                if !can_send_messages {
+                    continue;
+                }
+
+                cur_top = match cur_top {
+                    None => Some(chan),
+                    Some(cur_top) if chan.position < cur_top.position => Some(chan),
+                    _ => cur_top,
+                }
+            }
+            cur_top
+        };
+
+        // TODO: Maybe put a delay?
+        if let Some(channel) = channel {
+            log::info!("Saying hi to {:?}", guild.id);
+            channel.say(&ctx, self.bot.help()).await.unwrap();
         }
     }
 }
