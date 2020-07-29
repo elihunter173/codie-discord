@@ -1,5 +1,6 @@
 mod bot;
 
+use std::borrow::Cow;
 use std::env;
 use std::time::Duration;
 
@@ -41,6 +42,16 @@ lazy_static! {
     static ref CODE_BLOCK: Regex = Regex::new(r"(?sm)```(?P<lang>\S*)\n(?P<code>.*)```").unwrap();
 }
 
+// I use this rather tha push_codeblock_safe because it just strips out backticks but this makes it
+// look similar
+// Replace backticks with something that look really similar
+fn escape_codeblock(code: &str) -> Cow<str> {
+    lazy_static! {
+        static ref CODE_BLOCK_FENCE: Regex = Regex::new(r"```").unwrap();
+    }
+    CODE_BLOCK_FENCE.replace_all(code, "ˋˋˋ")
+}
+
 fn output_message(output: &Output) -> String {
     let mut message = MessageBuilder::new();
     if !output.success() {
@@ -51,12 +62,12 @@ fn output_message(output: &Output) -> String {
         if !output.stderr.is_empty() {
             message.push_bold("STDOUT:");
         }
-        message.push_codeblock(&output.stdout, None);
+        message.push_codeblock(escape_codeblock(&output.stdout), None);
     }
     if !output.stderr.is_empty() {
         message
             .push_bold("STDERR:")
-            .push_codeblock(&output.stderr, None);
+            .push_codeblock(escape_codeblock(&output.stderr), None);
     }
     message.build()
 }
