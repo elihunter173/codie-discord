@@ -12,7 +12,7 @@ use serenity::utils::MessageBuilder;
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::bot::{Bot, Output};
+use crate::bot::{Bot, Language, Output};
 
 // TODO: Put this in it's own module
 #[derive(Debug)]
@@ -89,6 +89,15 @@ print('Hello World')
         }
 
         log::debug!("language: {:?}, code: {:?}", lang, code);
+        let lang = match Language::from_code(lang) {
+            Some(lang) => lang,
+            None => {
+                return Err(
+                    UserError(format!("I'm sorry, I don't know how to run {}", lang)).into(),
+                )
+            }
+        };
+
         msg.react(&ctx, '🤖').await?;
         let output = self.bot.run_code(lang, code).await?;
         msg.channel_id.say(&ctx, output_message(&output)).await?;
@@ -119,9 +128,12 @@ impl EventHandler for Handler {
                     .await
                     .unwrap();
             }
-            ["#!help", lang] => match self.bot.help_lang(lang) {
-                Some(help) => {
-                    msg.channel_id.say(&ctx, help).await.unwrap();
+            ["#!help", lang] => match Language::from_code(lang) {
+                Some(lang) => {
+                    msg.channel_id
+                        .say(&ctx, self.bot.help_lang(lang))
+                        .await
+                        .unwrap();
                 }
                 None => {
                     msg.reply(&ctx, format!("I'm sorry. I don't know `{}`.", lang))
