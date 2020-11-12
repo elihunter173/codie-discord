@@ -17,8 +17,7 @@ anyhow = "1"
 futures-util = "0.3"
 
 [dependencies.serenity]
-git = "https://github.com/acdenisSK/serenity"
-branch = "await_next"
+version = "0.9"
 default-features = false
 features = [
     "builder",
@@ -32,8 +31,8 @@ features = [
 [dependencies.shiplift]
 git = "https://github.com/softprops/shiplift.git"
 branch = "master"
-# default-features = false
-# features = ["unix-socket", "chrono"]
+default-features = false
+features = ["unix-socket", "chrono"]
 
 [dev-dependencies]
 # Make test case generation easier
