@@ -7,10 +7,10 @@ use std::time::Duration;
 use serenity::client::Client;
 use serenity::model::channel::Message;
 use serenity::model::guild::Guild;
-use serenity::prelude::{Context, EventHandler};
+use serenity::prelude::*;
 use serenity::utils::MessageBuilder;
 
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::bot::{Bot, Language, Output};
@@ -38,17 +38,14 @@ struct Handler {
     bot: Bot,
 }
 
-lazy_static! {
-    static ref CODE_BLOCK: Regex = Regex::new(r"(?sm)```(?P<lang>\S*)\n(?P<code>.*)```").unwrap();
-}
+static CODE_BLOCK: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?sm)```(?P<lang>\S*)\n(?P<code>.*)```").unwrap());
 
 // I use this rather tha push_codeblock_safe because it just strips out backticks but this makes it
 // look similar
 // Replace backticks with something that look really similar
 fn escape_codeblock(code: &str) -> Cow<str> {
-    lazy_static! {
-        static ref CODE_BLOCK_FENCE: Regex = Regex::new(r"```").unwrap();
-    }
+    static CODE_BLOCK_FENCE: Lazy<Regex> = Lazy::new(|| Regex::new(r"```").unwrap());
     CODE_BLOCK_FENCE.replace_all(code, "ˋˋˋ")
 }
 
@@ -212,17 +209,19 @@ impl EventHandler for Handler {
 }
 
 #[tokio::main]
-async fn main() {
-    simple_logger::init_with_level(log::Level::Info).unwrap();
+async fn main() -> anyhow::Result<()> {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn,codie=info"))
+        .init();
 
     // Login with a bot token from the environment
-    let mut client = Client::new(&env::var("DISCORD_TOKEN").unwrap())
+    let mut client = Client::builder(&env::var("DISCORD_TOKEN").expect("`DISCORD_TOKEN` not set"))
         .event_handler(Handler {
             bot: Bot::new(Duration::from_secs(30), 1.0, 128 * 1024 * 1024).await,
         })
-        .await
-        .unwrap();
+        .await?;
 
     // Start as many shards as Discord recommends
-    client.start_autosharded().await.unwrap();
+    client.start_autosharded().await?;
+
+    Ok(())
 }

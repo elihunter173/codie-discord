@@ -378,15 +378,13 @@ fn main() {
 }
 
 #[cfg(test)]
-lazy_static::lazy_static! {
-    static ref RUNNER: Bot = Bot {
-        docker: Docker::new(),
-        timeout: Duration::from_secs(10),
-        // As much as needed
-        cpus: 0.0,
-        memory: 0,
-    };
-}
+static RUNNER: once_cell::sync::Lazy<Bot> = once_cell::sync::Lazy::new(|| Bot {
+    docker: Docker::new(),
+    timeout: Duration::from_secs(10),
+    // As much as needed
+    cpus: 0.0,
+    memory: 0,
+});
 
 #[cfg(test)]
 mod tests {
