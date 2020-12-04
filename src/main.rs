@@ -1,55 +1,40 @@
 mod bot;
 
 use std::borrow::Cow;
+use std::convert::TryInto;
 use std::env;
 use std::time::Duration;
 
+use once_cell::sync::Lazy;
 use serenity::client::Client;
-use serenity::model::channel::Message;
-use serenity::model::guild::Guild;
+use serenity::model::{channel::Message, event::MessageUpdateEvent, guild::Guild, id::MessageId};
 use serenity::prelude::*;
+use serenity::prelude::{Context, EventHandler};
 use serenity::utils::MessageBuilder;
 
-use once_cell::sync::Lazy;
+use sled::Tree;
+
 use regex::Regex;
 
 use crate::bot::{Bot, Language, Output};
 
-// TODO: Put this in it's own module
-#[derive(Debug)]
-struct UserError<S: AsRef<str> + fmt::Debug>(S);
-
-use std::error::Error;
-use std::fmt;
-
-impl<S: AsRef<str> + fmt::Debug> fmt::Display for UserError<S> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.0.as_ref())
-    }
-}
-
-impl<S: AsRef<str> + fmt::Debug> Error for UserError<S> {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        None
-    }
-}
-
 struct Handler {
     bot: Bot,
+    message_ids: MessageIds,
 }
 
 static CODE_BLOCK: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?sm)```(?P<lang>\S*)\n(?P<code>.*)```").unwrap());
 
-// I use this rather tha push_codeblock_safe because it just strips out backticks but this makes it
-// look similar
-// Replace backticks with something that look really similar
-fn escape_codeblock(code: &str) -> Cow<str> {
-    static CODE_BLOCK_FENCE: Lazy<Regex> = Lazy::new(|| Regex::new(r"```").unwrap());
-    CODE_BLOCK_FENCE.replace_all(code, "ˋˋˋ")
-}
-
 fn output_message(output: &Output) -> String {
+    // I use this rather tha push_codeblock_safe because it just strips out backticks but this makes it
+    // look similar
+    // Replace backticks with something that look really similar
+    fn escape_codeblock(code: &str) -> Cow<str> {
+        static CODE_BLOCK_FENCE: Lazy<Regex> = Lazy::new(|| Regex::new(r"```").unwrap());
+        CODE_BLOCK_FENCE.replace_all(code, "ˋˋˋ")
+    }
+
     let mut message = MessageBuilder::new();
     if !output.success() {
         message.push_bold("EXIT STATUS: ").push_line(output.status);
@@ -70,9 +55,9 @@ fn output_message(output: &Output) -> String {
 }
 
 impl Handler {
-    async fn message_impl(&self, ctx: &Context, msg: &Message) -> anyhow::Result<()> {
-        log::debug!("Responding to {:#?}", msg.content);
-        let (lang, code) = match CODE_BLOCK.captures(&msg.content) {
+    async fn try_run_raw(&self, msg: &str) -> String {
+        log::debug!("Responding to {:#?}", msg);
+        let (lang, code) = match CODE_BLOCK.captures(msg) {
             Some(caps) => (
                 caps.name("lang").unwrap().as_str(),
                 caps.name("code").unwrap().as_str(),
@@ -84,37 +69,89 @@ Be sure to annotate your code blocks with a language like
 \`\`\`python
 print('Hello World')
 \`\`\`";
-                return Err(UserError(message).into());
+                return message.into();
             }
         };
         if lang.is_empty() {
-            return Err(UserError(
-                    format!(r"I noticed you sent a code block but didn't include a language tag, so I don't know how to run it. The language goes immediately after the \`\`\` like so
+            return format!(
+                r"I noticed you sent a code block but didn't include a language tag, so I don't know how to run it. The language goes immediately after the \`\`\` like so
 
 \`\`\`your-language-here
-{code}\`\`\`", code=code),
-                ).into());
+{code}\`\`\`",
+                code = code
+            );
         }
 
         log::debug!("language: {:?}, code: {:?}", lang, code);
         let lang = match Language::from_code(lang) {
             Some(lang) => lang,
             None => {
-                return Err(
-                    UserError(format!("I'm sorry, I don't know how to run {}", lang)).into(),
-                )
+                return format!("I'm sorry, I don't know how to run {}", lang);
             }
         };
 
-        msg.react(&ctx, '🤖').await?;
-        let output = self.bot.run_code(lang, code).await?;
-        msg.channel_id.say(&ctx, output_message(&output)).await?;
-        Ok(())
+        let output = match self.bot.run_code(lang, code).await {
+            Ok(output) => output,
+            Err(err) => {
+                return format!("{}", err);
+            }
+        };
+        output_message(&output)
     }
 }
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
+    // RULES FOR EDITING:
+    // * The rules for mentioning is the same
+    // * If a message is edited, she updates her reply to that message if it exists. Otherwise she
+    // complains. Should be able to do channel.messages(|builder| builder.after(msg.id).limit(10)).
+    // Might have to embed a message ID we're replying to in the thing. Or actually pick the first
+    // message within 10 after that mentions the user
+    // I'm kinda leaning towards message ID
+    async fn message_update(
+        &self,
+        ctx: Context,
+        _old_if_available: Option<Message>,
+        _new: Option<Message>,
+        event: MessageUpdateEvent,
+    ) {
+        // TODO: Remove all reactions upon update.
+        // TODO: If it fails to find an previous message reply with a "X"
+
+        // Says message is private or metions us
+        let my_id = ctx.cache.current_user_id().await;
+        let mentions_me = if let Some(mentions) = &event.mentions {
+            mentions.iter().any(|user| user.id == my_id)
+        } else {
+            false
+        };
+
+        // Don't respond if it's a group message that doesn't mention us
+        if event.guild_id.is_some() && !mentions_me {
+            return;
+        }
+
+        let reply_id = self.message_ids.get(event.id).unwrap().expect("no reply");
+        use serenity::model::misc::Mentionable;
+        let mention = event.author.unwrap().mention();
+        event
+            .channel_id
+            .edit_message(&ctx, reply_id, |builder| {
+                builder.content(format!("{}: Re-running code", mention))
+            })
+            .await
+            .unwrap();
+        let body = self.try_run_raw(&event.content.as_ref().unwrap()).await;
+        event
+            .channel_id
+            .edit_message(&ctx, reply_id, |builder| {
+                builder.content(format!("{}: {}", mention, body))
+            })
+            .await
+            .unwrap();
+    }
+
     async fn message(&self, ctx: Context, msg: Message) {
         if msg.is_own(&ctx).await {
             return;
@@ -130,12 +167,7 @@ impl EventHandler for Handler {
             ["#!help"] => {
                 msg.channel_id.say(&ctx, self.bot.help()).await.unwrap();
             }
-            ["#!languages"] => {
-                msg.channel_id
-                    .say(&ctx, self.bot.help_languages())
-                    .await
-                    .unwrap();
-            }
+
             ["#!help", lang] => match Language::from_code(lang) {
                 Some(lang) => {
                     msg.channel_id
@@ -149,13 +181,26 @@ impl EventHandler for Handler {
                         .unwrap();
                 }
             },
+
+            ["#!languages"] => {
+                msg.channel_id
+                    .say(&ctx, self.bot.help_languages())
+                    .await
+                    .unwrap();
+            }
+
             _ => {
                 if msg.is_private() || msg.mentions_me(&ctx).await.unwrap() {
-                    if let Err(e) = self.message_impl(&ctx, &msg).await {
-                        log::error!("{:#?}", e);
-                        msg.reply(&ctx, e).await.unwrap();
+                    // TODO: Send work (message) ID and use that for editing?
+                    // TODO: Use reactions on message
+                    msg.react(&ctx, '🤖').await.unwrap();
+                    let body = self.try_run_raw(&msg.content).await;
+                    let reply = msg.reply(&ctx, body).await.unwrap();
+                    if let Some(_) = self.message_ids.insert(msg.id, reply.id).unwrap() {
+                        panic!("colliding message ids");
                     }
                 }
+
                 if msg.content.starts_with("#!") {
                     msg.reply(&ctx, "I'm sorry. I didn't recognize that command")
                         .await
@@ -170,8 +215,11 @@ impl EventHandler for Handler {
             return;
         }
 
-        // Lower position number is top Find a channel I can send messages in. I couldn't get
-        // streams/iterators to work so I had to resort to this code. I know it's messy :(
+        // Pick the channel to send the intro message into. We want to pick the most popular
+        // channel (e.g. #general) we can send messages in. Since Discord doesn't provide a native
+        // way to do this, we use the heuristic of picking the channel nearest the top. I would do
+        // this with stream min/max, but I couldn't get streams/iterators to work, so I had to
+        // resort to this code :(
         let channel = {
             let me = ctx.cache.current_user_id().await;
             use serenity::model::channel::ChannelType;
@@ -200,11 +248,30 @@ impl EventHandler for Handler {
             cur_top
         };
 
-        // TODO: Maybe put a delay?
+        // TODO: Maybe put a delay so that we don't beat Discord intro message for us?
         if let Some(channel) = channel {
             log::info!("Saying hi to {:?}", guild.id);
             channel.say(&ctx, self.bot.help()).await.unwrap();
         }
+    }
+}
+
+struct MessageIds(Tree);
+
+// TODO: Figure out a better way to do this
+impl MessageIds {
+    fn insert(&self, k: MessageId, v: MessageId) -> sled::Result<Option<MessageId>> {
+        self.0
+            .insert(&k.as_u64().to_le_bytes(), &v.as_u64().to_le_bytes())
+            .map(|opt| {
+                opt.map(|ivec| MessageId(u64::from_le_bytes(ivec.as_ref().try_into().unwrap())))
+            })
+    }
+
+    fn get(&self, k: MessageId) -> sled::Result<Option<MessageId>> {
+        self.0.get(&k.as_u64().to_le_bytes()).map(|opt| {
+            opt.map(|ivec| MessageId(u64::from_le_bytes(ivec.as_ref().try_into().unwrap())))
+        })
     }
 }
 
@@ -214,9 +281,14 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     // Login with a bot token from the environment
+
+    let db = sled::open("data")?;
+
+    // Login with a bot token from the environment
     let mut client = Client::builder(&env::var("DISCORD_TOKEN").expect("`DISCORD_TOKEN` not set"))
         .event_handler(Handler {
             bot: Bot::new(Duration::from_secs(30), 1.0, 128 * 1024 * 1024).await,
+            message_ids: MessageIds(db.open_tree("message_ids")?),
         })
         .await?;
 
