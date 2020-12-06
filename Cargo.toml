@@ -15,6 +15,9 @@ anyhow = "1"
 futures-util = "0.3"
 sled = "0.34"
 
+unicase = "2.6"
+inventory = "0.1"
+
 [dependencies.serenity]
 version = "0.9"
 default-features = false
@@ -35,4 +38,4 @@ features = ["unix-socket", "chrono"]
 
 [dev-dependencies]
 # Make test case generation easier
-paste = "0.1"
+paste = "1"

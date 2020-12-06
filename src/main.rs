@@ -1,25 +1,28 @@
 mod bot;
+mod lang;
 
-use std::borrow::Cow;
 use std::convert::TryInto;
 use std::env;
 use std::time::Duration;
+use std::{borrow::Cow, collections::HashMap};
 
 use once_cell::sync::Lazy;
 use serenity::client::Client;
 use serenity::model::{channel::Message, event::MessageUpdateEvent, guild::Guild, id::MessageId};
-use serenity::prelude::*;
 use serenity::prelude::{Context, EventHandler};
 use serenity::utils::MessageBuilder;
+
+use shiplift::Docker;
 
 use sled::Tree;
 
 use regex::Regex;
 
-use crate::bot::{Bot, Language, Output};
+use crate::bot::{CodeRunner, Output};
+use crate::lang::LangRef;
 
 struct Handler {
-    bot: Bot,
+    bot: CodeRunner,
     message_ids: MessageIds,
 }
 
@@ -83,10 +86,13 @@ print('Hello World')
         }
 
         log::debug!("language: {:?}, code: {:?}", lang, code);
-        let lang = match Language::from_code(lang) {
+        let lang = match self.bot.get_lang_by_code(lang) {
             Some(lang) => lang,
             None => {
-                return format!("I'm sorry, I don't know how to run {}", lang);
+                return format!(
+                    "I'm sorry, I don't know how to run `{}` code-snippets",
+                    lang
+                );
             }
         };
 
@@ -116,7 +122,7 @@ impl EventHandler for Handler {
         _new: Option<Message>,
         event: MessageUpdateEvent,
     ) {
-        // TODO: Remove all reactions upon update.
+        // TODO: Remove all reactions upon update?
         // TODO: If it fails to find an previous message reply with a "X"
 
         // Says message is private or metions us
@@ -159,21 +165,16 @@ impl EventHandler for Handler {
 
         log::debug!("{}", msg.content);
 
-        // TODO: Extract commands to be separate from the handler
-        // TODO: Handle extract this out. Use some sort of macro to define commands in a framework
-        // style
-        // TODO: Get suggestsions when you make a typo on a command using strsim
+        // TODO: Extract commands to be separate from the handler?
+        // TODO: Get suggestions when you make a typo on a command using strsim
         match msg.content.split(' ').collect::<Vec<_>>().as_slice() {
             ["#!help"] => {
                 msg.channel_id.say(&ctx, self.bot.help()).await.unwrap();
             }
 
-            ["#!help", lang] => match Language::from_code(lang) {
+            ["#!help", lang] => match self.bot.get_lang_by_code(lang) {
                 Some(lang) => {
-                    msg.channel_id
-                        .say(&ctx, self.bot.help_lang(lang))
-                        .await
-                        .unwrap();
+                    msg.channel_id.say(&ctx, lang.help()).await.unwrap();
                 }
                 None => {
                     msg.reply(&ctx, format!("I'm sorry. I don't know `{}`.", lang))
@@ -191,8 +192,6 @@ impl EventHandler for Handler {
 
             _ => {
                 if msg.is_private() || msg.mentions_me(&ctx).await.unwrap() {
-                    // TODO: Send work (message) ID and use that for editing?
-                    // TODO: Use reactions on message
                     msg.react(&ctx, '🤖').await.unwrap();
                     let body = self.try_run_raw(&msg.content).await;
                     let reply = msg.reply(&ctx, body).await.unwrap();
@@ -258,7 +257,7 @@ impl EventHandler for Handler {
 
 struct MessageIds(Tree);
 
-// TODO: Figure out a better way to do this
+// TODO: Figure out a better way to do this?
 impl MessageIds {
     fn insert(&self, k: MessageId, v: MessageId) -> sled::Result<Option<MessageId>> {
         self.0
@@ -280,14 +279,32 @@ async fn main() -> anyhow::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn,codie=info"))
         .init();
 
-    // Login with a bot token from the environment
+    let mut langs = HashMap::new();
+    for &lang in inventory::iter::<LangRef> {
+        log::info!(
+            "Registering language `{}` with codes {:?}",
+            lang,
+            lang.codes()
+        );
+        for &c in lang.codes() {
+            if let Some(old_lang) = langs.insert(c, lang) {
+                panic!("{} and {} have the same code {:?}", old_lang, lang, c);
+            }
+        }
+    }
 
     let db = sled::open("data")?;
 
     // Login with a bot token from the environment
     let mut client = Client::builder(&env::var("DISCORD_TOKEN").expect("`DISCORD_TOKEN` not set"))
         .event_handler(Handler {
-            bot: Bot::new(Duration::from_secs(30), 1.0, 128 * 1024 * 1024).await,
+            bot: CodeRunner {
+                docker: Docker::new(),
+                langs,
+                timeout: Duration::from_secs(30),
+                cpus: 1.0,
+                memory: 128 * 1024 * 1024,
+            },
             message_ids: MessageIds(db.open_tree("message_ids")?),
         })
         .await?;
