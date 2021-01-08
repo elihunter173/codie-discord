@@ -13,8 +13,8 @@ use crate::lang::LangRef;
 #[derive(Debug, Eq, PartialEq)]
 pub struct Output {
     pub status: u64,
-    pub stdout: String,
-    pub stderr: String,
+    pub stdout: Box<str>,
+    pub stderr: Box<str>,
 }
 
 impl Output {
@@ -111,8 +111,8 @@ impl CodeRunner {
 
         Ok(Output {
             status: exit.status_code,
-            stdout,
-            stderr,
+            stdout: stdout.into_boxed_str(),
+            stderr: stderr.into_boxed_str(),
         })
     }
 }

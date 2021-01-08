@@ -92,7 +92,7 @@ print('Hello World')
             None => {
                 // TODO: Get suggestions using strsim
                 return format!(
-                    "I'm sorry, I don't know how to run `{}` code-snippets",
+                    "I'm sorry. I don't know how to run `{}` code snippets.",
                     lang
                 );
             }
@@ -140,9 +140,16 @@ impl EventHandler for Handler {
             return;
         }
 
-        let reply_id = self.message_ids.get(event.id).unwrap().expect("no reply");
+        let reply_id = if let Some(reply_id) = self.message_ids.get(event.id).unwrap() {
+            reply_id
+        } else {
+            let msg = event.channel_id.message(&ctx, event.id).await.unwrap();
+            msg.react(&ctx, '❌').await.unwrap();
+            return;
+        };
+
         use serenity::model::misc::Mentionable;
-        let mention = event.author.unwrap().mention();
+        let mention = event.author.expect("cannot find author").mention();
         event
             .channel_id
             .edit_message(&ctx, reply_id, |builder| {
@@ -150,14 +157,28 @@ impl EventHandler for Handler {
             })
             .await
             .unwrap();
-        let body = self.try_run_raw(&event.content.as_ref().unwrap()).await;
-        event
+        let body = self
+            .try_run_raw(&event.content.as_ref().expect("cannot find message body"))
+            .await;
+
+        match event
             .channel_id
             .edit_message(&ctx, reply_id, |builder| {
                 builder.content(format!("{}: {}", mention, body))
             })
             .await
-            .unwrap();
+        {
+            Ok(_) => {}
+            Err(err) => {
+                event
+                    .channel_id
+                    .edit_message(&ctx, reply_id, |builder| {
+                        builder.content(format!("{}: {}", mention, err))
+                    })
+                    .await
+                    .unwrap();
+            }
+        }
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
