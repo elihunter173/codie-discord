@@ -1,16 +1,15 @@
 mod bot;
 mod lang;
 
-use std::convert::TryInto;
-use std::env;
-use std::time::Duration;
-use std::{borrow::Cow, collections::HashMap};
+use std::{collections::HashMap, convert::TryInto, env, time::Duration};
 
 use once_cell::sync::Lazy;
-use serenity::model::{channel::Message, event::MessageUpdateEvent, id::MessageId};
-use serenity::prelude::{Context, EventHandler};
-use serenity::utils::MessageBuilder;
-use serenity::{client::Client, utils::Color};
+use serenity::{
+    client::Client,
+    model::{channel::Message, event::MessageUpdateEvent, guild::Guild, id::MessageId},
+    prelude::{Context, EventHandler},
+    utils::Color,
+};
 
 use shiplift::Docker;
 
@@ -18,8 +17,7 @@ use sled::Tree;
 
 use regex::Regex;
 
-use crate::bot::{CodeRunner, Output};
-use crate::lang::LangRef;
+use crate::{bot::CodeRunner, lang::LangRef};
 
 struct Handler {
     language_text: Box<str>,
@@ -29,34 +27,6 @@ struct Handler {
 
 static CODE_BLOCK: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?sm)```(?P<lang>\S*)\n(?P<code>.*)```").unwrap());
-
-fn output_message(output: &Output) -> String {
-    // I use this rather tha push_codeblock_safe because it just strips out backticks but this makes it
-    // look similar
-    // Replace backticks with something that look really similar
-    fn escape_codeblock(code: &str) -> Cow<str> {
-        static CODE_BLOCK_FENCE: Lazy<Regex> = Lazy::new(|| Regex::new(r"```").unwrap());
-        CODE_BLOCK_FENCE.replace_all(code, "ˋˋˋ")
-    }
-
-    let mut message = MessageBuilder::new();
-    if !output.success() {
-        message.push_bold("EXIT STATUS: ").push_line(output.status);
-    }
-    if !output.stdout.is_empty() {
-        // I like to keep output simple if there's no stderr
-        if !output.stderr.is_empty() {
-            message.push_bold("STDOUT:");
-        }
-        message.push_codeblock(escape_codeblock(&output.stdout), None);
-    }
-    if !output.stderr.is_empty() {
-        message
-            .push_bold("STDERR:")
-            .push_codeblock(escape_codeblock(&output.stderr), None);
-    }
-    message.build()
-}
 
 impl Handler {
     async fn try_run_raw(&self, msg: &str) -> String {
@@ -98,13 +68,10 @@ print('Hello World')
             }
         };
 
-        let output = match self.bot.run_code(lang, code).await {
-            Ok(output) => output,
-            Err(err) => {
-                return format!("{}", err);
-            }
-        };
-        output_message(&output)
+        match self.bot.run_code(lang, code).await {
+            Ok(output) => format!("{}", output),
+            Err(err) => format!("{}", err),
+        }
     }
 }
 
@@ -125,7 +92,6 @@ impl EventHandler for Handler {
         event: MessageUpdateEvent,
     ) {
         // TODO: Remove all reactions upon update?
-        // TODO: If it fails to find an previous message reply with a "X"
 
         // Says message is private or metions us
         let my_id = ctx.cache.current_user_id().await;
@@ -143,22 +109,28 @@ impl EventHandler for Handler {
         let reply_id = if let Some(reply_id) = self.message_ids.get(event.id).unwrap() {
             reply_id
         } else {
-            let msg = event.channel_id.message(&ctx, event.id).await.unwrap();
-            msg.react(&ctx, '❌').await.unwrap();
+            let msg = event
+                .channel_id
+                .message(&ctx, event.id)
+                .await
+                .expect("failed to get handle on message");
+            msg.react(&ctx, '❌')
+                .await
+                .expect("failed to reach to message");
             return;
         };
 
         use serenity::model::misc::Mentionable;
-        let mention = event.author.expect("cannot find author").mention();
+        let mention = event.author.expect("failed to find author").mention();
         event
             .channel_id
             .edit_message(&ctx, reply_id, |builder| {
                 builder.content(format!("{}: Re-running code", mention))
             })
             .await
-            .unwrap();
+            .expect("failed to edit message");
         let body = self
-            .try_run_raw(&event.content.as_ref().expect("cannot find message body"))
+            .try_run_raw(&event.content.as_ref().expect("failed to find message body"))
             .await;
 
         match event
@@ -176,7 +148,7 @@ impl EventHandler for Handler {
                         builder.content(format!("{}: {}", mention, err))
                     })
                     .await
-                    .unwrap();
+                    .expect("failed to edit message");
             }
         }
     }
@@ -194,7 +166,7 @@ impl EventHandler for Handler {
 
 Make sure to include a language right after backticks (\`\`\`) or else I won't know how to run your code!"#;
             const EXAMPLE: &str = r#"@Codie Please run this code \`\`\`python
-print("hello, World!")
+print("Hello, World!")
 \`\`\`"#;
             msg.channel_id
                 .send_message(&ctx, |m| {
@@ -213,18 +185,23 @@ print("hello, World!")
                     })
                 })
                 .await
-                .unwrap();
+                .expect("failed to send help message");
         } else if msg.is_private() || msg.mentions_me(&ctx).await.unwrap() {
-            msg.react(&ctx, '🤖').await.unwrap();
+            msg.react(&ctx, '🤖')
+                .await
+                .expect("failed to react to message");
             let body = self.try_run_raw(&msg.content).await;
-            let reply = msg.reply(&ctx, body).await.unwrap();
+            let reply = msg
+                .reply(&ctx, body)
+                .await
+                .expect("failed to reply to message");
             if let Some(_) = self.message_ids.insert(msg.id, reply.id).unwrap() {
                 panic!("colliding message ids");
             }
         } else if msg.content.starts_with("#!") {
             msg.reply(&ctx, "I'm sorry. I didn't recognize that command")
                 .await
-                .unwrap();
+                .expect("failed to reply");
         }
     }
 }
@@ -268,7 +245,7 @@ async fn main() -> anyhow::Result<()> {
             }
             codes.push(format!("{}", c));
         }
-        language_text.push(format!("**{}**: {}", lang, codes.join(", ")));
+        language_text.push(format!("**{}:** {}", lang, codes.join(", ")));
     }
     language_text.sort();
 

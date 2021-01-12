@@ -31,8 +31,8 @@ features = [
 ]
 
 [dependencies.shiplift]
-git = "https://github.com/softprops/shiplift.git"
-branch = "master"
+git = "https://github.com/elihunter173/shiplift.git"
+branch = "container-stop-opts"
 default-features = false
 features = ["unix-socket", "chrono"]
 

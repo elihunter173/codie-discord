@@ -41,8 +41,7 @@ macro_rules! test_lang {
                     output,
                     crate::bot::Output {
                         status: 0,
-                        stdout: "Hello, World!\n".into(),
-                        stderr: "".into(),
+                        tty: "Hello, World!\n".into(),
                     }
                 );
             }
@@ -166,8 +165,7 @@ impl Language for Go {
         let mut builder = ContainerOptions::builder("golang:alpine");
         builder
             .cmd(vec!["sh", "-c", "ln -s code code.go && go run code.go"])
-            // So we can build go code properly
-            .env(vec!["GOCACHE=/tmp/.cache/go"]);
+            .env(["GOCACHE=/tmp/.cache/go"]);
         builder
     }
 }
@@ -241,7 +239,10 @@ impl Language for Python {
     }
     fn container_options(&self) -> ContainerOptionsBuilder {
         let mut builder = ContainerOptions::builder("python:alpine");
-        builder.cmd(vec!["python", "code"]);
+        // Make python run unbuffered. If you don't then we get weird orderings of messages
+        builder
+            .cmd(vec!["python", "code"])
+            .env(["PYTHONUNBUFFERED=1"]);
         builder
     }
 }
