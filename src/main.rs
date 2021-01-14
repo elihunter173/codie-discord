@@ -7,10 +7,10 @@ use std::time::Duration;
 use std::{borrow::Cow, collections::HashMap};
 
 use once_cell::sync::Lazy;
-use serenity::client::Client;
-use serenity::model::{channel::Message, event::MessageUpdateEvent, guild::Guild, id::MessageId};
+use serenity::model::{channel::Message, event::MessageUpdateEvent, id::MessageId};
 use serenity::prelude::{Context, EventHandler};
 use serenity::utils::MessageBuilder;
+use serenity::{client::Client, utils::Color};
 
 use shiplift::Docker;
 
@@ -22,6 +22,7 @@ use crate::bot::{CodeRunner, Output};
 use crate::lang::LangRef;
 
 struct Handler {
+    language_text: Box<str>,
     bot: CodeRunner,
     message_ids: MessageIds,
 }
@@ -89,6 +90,7 @@ print('Hello World')
         let lang = match self.bot.get_lang_by_code(lang) {
             Some(lang) => lang,
             None => {
+                // TODO: Get suggestions using strsim
                 return format!(
                     "I'm sorry, I don't know how to run `{}` code-snippets",
                     lang
@@ -165,92 +167,43 @@ impl EventHandler for Handler {
 
         log::debug!("{}", msg.content);
 
-        // TODO: Extract commands to be separate from the handler?
-        // TODO: Get suggestions when you make a typo on a command using strsim
-        match msg.content.split(' ').collect::<Vec<_>>().as_slice() {
-            ["#!help"] => {
-                msg.channel_id.say(&ctx, self.bot.help()).await.unwrap();
+        if msg.content == "#!help" {
+            // We extract this because otherwise rustfmt falis
+            const HELP: &str = r#"I know how to run a variety of languages. All you have to do to ask me to run a block of code is to @ me in the message containing the code you want me to run.
+
+Make sure to include a language right after backticks (\`\`\`) or else I won't know how to run your code!"#;
+            const EXAMPLE: &str = r#"@Codie Please run this code \`\`\`python
+print("hello, World!")
+\`\`\`"#;
+            msg.channel_id
+                .send_message(&ctx, |m| {
+                    m.embed(|e| {
+                        // TODO: Should I use .author instead of .title? It's smaller but it can
+                        // include an icon and isn't blue
+                        e.title("Codie the Code Runner")
+                            .url("https://github.com/elihunter173/codie-discord")
+                            .footer(|f| {
+                                f.text("Made by elihunter173 with love - https://elihunter173.com/")
+                            })
+                            .color(Color::from_rgb(255, 105, 180))
+                            .description(HELP)
+                            .field("Example", EXAMPLE, true)
+                            .field("Supported Languages", &self.language_text, false)
+                    })
+                })
+                .await
+                .unwrap();
+        } else if msg.is_private() || msg.mentions_me(&ctx).await.unwrap() {
+            msg.react(&ctx, '🤖').await.unwrap();
+            let body = self.try_run_raw(&msg.content).await;
+            let reply = msg.reply(&ctx, body).await.unwrap();
+            if let Some(_) = self.message_ids.insert(msg.id, reply.id).unwrap() {
+                panic!("colliding message ids");
             }
-
-            ["#!help", lang] => match self.bot.get_lang_by_code(lang) {
-                Some(lang) => {
-                    msg.channel_id.say(&ctx, lang.help()).await.unwrap();
-                }
-                None => {
-                    msg.reply(&ctx, format!("I'm sorry. I don't know `{}`.", lang))
-                        .await
-                        .unwrap();
-                }
-            },
-
-            ["#!languages"] => {
-                msg.channel_id
-                    .say(&ctx, self.bot.help_languages())
-                    .await
-                    .unwrap();
-            }
-
-            _ => {
-                if msg.is_private() || msg.mentions_me(&ctx).await.unwrap() {
-                    msg.react(&ctx, '🤖').await.unwrap();
-                    let body = self.try_run_raw(&msg.content).await;
-                    let reply = msg.reply(&ctx, body).await.unwrap();
-                    if let Some(_) = self.message_ids.insert(msg.id, reply.id).unwrap() {
-                        panic!("colliding message ids");
-                    }
-                }
-
-                if msg.content.starts_with("#!") {
-                    msg.reply(&ctx, "I'm sorry. I didn't recognize that command")
-                        .await
-                        .unwrap();
-                }
-            }
-        }
-    }
-
-    async fn guild_create(&self, ctx: Context, guild: Guild, is_new: bool) {
-        if !is_new {
-            return;
-        }
-
-        // Pick the channel to send the intro message into. We want to pick the most popular
-        // channel (e.g. #general) we can send messages in. Since Discord doesn't provide a native
-        // way to do this, we use the heuristic of picking the channel nearest the top. I would do
-        // this with stream min/max, but I couldn't get streams/iterators to work, so I had to
-        // resort to this code :(
-        let channel = {
-            let me = ctx.cache.current_user_id().await;
-            use serenity::model::channel::ChannelType;
-            let text_channels = guild
-                .channels
-                .values()
-                .filter(|chan| chan.kind == ChannelType::Text);
-
-            let mut cur_top = None;
-            for chan in text_channels {
-                let can_send_messages = chan
-                    .permissions_for_user(&ctx, me)
-                    .await
-                    .unwrap()
-                    .send_messages();
-                if !can_send_messages {
-                    continue;
-                }
-
-                cur_top = match cur_top {
-                    None => Some(chan),
-                    Some(cur_top) if chan.position < cur_top.position => Some(chan),
-                    _ => cur_top,
-                }
-            }
-            cur_top
-        };
-
-        // TODO: Maybe put a delay so that we don't beat Discord intro message for us?
-        if let Some(channel) = channel {
-            log::info!("Saying hi to {:?}", guild.id);
-            channel.say(&ctx, self.bot.help()).await.unwrap();
+        } else if msg.content.starts_with("#!") {
+            msg.reply(&ctx, "I'm sorry. I didn't recognize that command")
+                .await
+                .unwrap();
         }
     }
 }
@@ -280,24 +233,30 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let mut langs = HashMap::new();
+    let mut language_text = Vec::new();
     for &lang in inventory::iter::<LangRef> {
         log::info!(
             "Registering language `{}` with codes {:?}",
             lang,
             lang.codes()
         );
+        let mut codes = Vec::new();
         for &c in lang.codes() {
             if let Some(old_lang) = langs.insert(c, lang) {
                 panic!("{} and {} have the same code {:?}", old_lang, lang, c);
             }
+            codes.push(format!("{}", c));
         }
+        language_text.push(format!("**{}**: {}", lang, codes.join(", ")));
     }
+    language_text.sort();
 
     let db = sled::open("data")?;
 
     // Login with a bot token from the environment
     let mut client = Client::builder(&env::var("DISCORD_TOKEN").expect("`DISCORD_TOKEN` not set"))
         .event_handler(Handler {
+            language_text: language_text.join("\n").into_boxed_str(),
             bot: CodeRunner {
                 docker: Docker::new(),
                 langs,

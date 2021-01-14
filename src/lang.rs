@@ -10,7 +10,6 @@ pub trait Language: Display {
     // const FILENAME: &'static str;
     // const HELLO_WORLD: &'static str;
     // const CODES: &'static [&'static str];
-    fn help(&self) -> &str;
     // From https://github.com/highlightjs/highlight.js/blob/master/SUPPORTED_LANGUAGES.md.
     fn codes(&self) -> &[Ascii<&str>];
     fn container_options(&self) -> ContainerOptionsBuilder;
@@ -69,9 +68,6 @@ macro_rules! codes {
 
 make_lang!(Bash);
 impl Language for Bash {
-    fn help(&self) -> &str {
-        "GNU's Bourne-again shell. The most common *NIX style shell today."
-    }
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["bash", "sh", "zsh"]
     }
@@ -85,9 +81,6 @@ test_lang!(Bash, "echo 'Hello, World!'");
 
 make_lang!(C);
 impl Language for C {
-    fn help(&self) -> &str {
-        ""
-    }
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["c", "h"]
     }
@@ -113,9 +106,6 @@ int main() {
 
 make_lang!(Cpp);
 impl Language for Cpp {
-    fn help(&self) -> &str {
-        ""
-    }
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["cpp", "hpp", "cc", "hh", "c++", "h++", "cxx", "hxx"]
     }
@@ -141,9 +131,6 @@ int main() {
 
 make_lang!(Fortran);
 impl Language for Fortran {
-    fn help(&self) -> &str {
-        ""
-    }
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["fortran", "f90", "f95"]
     }
@@ -172,9 +159,6 @@ end program hello"#
 
 make_lang!(Go);
 impl Language for Go {
-    fn help(&self) -> &str {
-        ""
-    }
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["go", "golang"]
     }
@@ -199,9 +183,6 @@ func main() {
 
 make_lang!(Java);
 impl Language for Java {
-    fn help(&self) -> &str {
-        ""
-    }
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["java", "jsp"]
     }
@@ -229,9 +210,6 @@ public class Hello {
 
 make_lang!(JavaScript);
 impl Language for JavaScript {
-    fn help(&self) -> &str {
-        ""
-    }
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["javascript", "js", "jsx"]
     }
@@ -245,9 +223,6 @@ test_lang!(JavaScript, "console.log('Hello, World!');");
 
 make_lang!(Perl);
 impl Language for Perl {
-    fn help(&self) -> &str {
-        ""
-    }
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["perl", "pl", "pm"]
     }
@@ -261,9 +236,6 @@ test_lang!(Perl, "print 'Hello, World!\n'");
 
 make_lang!(Python);
 impl Language for Python {
-    fn help(&self) -> &str {
-        ""
-    }
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["python", "py", "gyp"]
     }
@@ -277,9 +249,6 @@ test_lang!(Python, "print('Hello, World!')");
 
 make_lang!(Ruby);
 impl Language for Ruby {
-    fn help(&self) -> &str {
-        ""
-    }
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["ruby", "rb", "gemspec", "podspec", "thor", "irb"]
     }
@@ -293,9 +262,6 @@ test_lang!(Ruby, "puts 'Hello, World!'");
 
 make_lang!(Rust);
 impl Language for Rust {
-    fn help(&self) -> &str {
-        ""
-    }
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["rust", "rs"]
     }

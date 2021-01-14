@@ -40,22 +40,6 @@ impl CodeRunner {
         self.langs.get(&Ascii::new(code)).copied()
     }
 
-    pub fn help_languages(&self) -> &str {
-        "TODO: Write the help documentation"
-    }
-
-    pub fn help(&self) -> &str {
-        r#"Hi! I'm Codie the Code Runner.
-
-I know how to run a variety of languages. All you have to do to ask me to run a block of code is to @ me in the message containing the code you want me to run. Make sure to include a language right after backticks (\`\`\`) or else I won't know how to run your code!
-
-> @Codie Please run this code \`\`\`python
-> print("Hi!")
-> \`\`\`
-"#
-        // TODO: document commands
-    }
-
     pub async fn run_code<'s>(&'s self, lang: LangRef, code: &'s str) -> anyhow::Result<Output> {
         let container = {
             let response = self
