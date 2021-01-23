@@ -6,7 +6,7 @@ use std::{collections::HashMap, convert::TryInto, env, time::Duration};
 use once_cell::sync::Lazy;
 use serenity::{
     client::Client,
-    model::{channel::Message, event::MessageUpdateEvent, guild::Guild, id::MessageId},
+    model::{channel::Message, event::MessageUpdateEvent, id::MessageId},
     prelude::{Context, EventHandler},
     utils::Color,
 };
@@ -120,13 +120,9 @@ impl EventHandler for Handler {
             return;
         };
 
-        use serenity::model::misc::Mentionable;
-        let mention = event.author.expect("failed to find author").mention();
         event
             .channel_id
-            .edit_message(&ctx, reply_id, |builder| {
-                builder.content(format!("{}: Re-running code", mention))
-            })
+            .edit_message(&ctx, reply_id, |builder| builder.content("Re-running code"))
             .await
             .expect("failed to edit message");
         let body = self
@@ -135,18 +131,14 @@ impl EventHandler for Handler {
 
         match event
             .channel_id
-            .edit_message(&ctx, reply_id, |builder| {
-                builder.content(format!("{}: {}", mention, body))
-            })
+            .edit_message(&ctx, reply_id, |builder| builder.content(body))
             .await
         {
             Ok(_) => {}
             Err(err) => {
                 event
                     .channel_id
-                    .edit_message(&ctx, reply_id, |builder| {
-                        builder.content(format!("{}: {}", mention, err))
-                    })
+                    .edit_message(&ctx, reply_id, |builder| builder.content(err))
                     .await
                     .expect("failed to edit message");
             }

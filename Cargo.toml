@@ -5,7 +5,7 @@ authors = ["Eli W. Hunter <elihunter173@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
 log = "0.4"
 env_logger = "0.8"
 regex = "1"
@@ -19,7 +19,7 @@ unicase = "2.6"
 inventory = "0.1"
 
 [dependencies.serenity]
-version = "0.9"
+version = "0.10"
 default-features = false
 features = [
     "builder",
