@@ -33,10 +33,7 @@ impl fmt::Display for Output {
             write!(f, "**EXIT STATUS:** {}\n", self.status)?;
         }
 
-        if !self.tty.is_empty() {
-            // I like to keep self simple if there's no stderr
-            write!(f, "```\n{}```", escape_codeblock(&self.tty))?;
-        }
+        write!(f, "```\n{}```", escape_codeblock(&self.tty))?;
         Ok(())
     }
 }

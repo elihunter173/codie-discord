@@ -23,6 +23,8 @@ struct Handler {
     message_ids: MessageIds,
 }
 
+// TODO: When there is no code given, Discord says that the language code is the code while we say
+// the language code is the language code. We should agree with discord always
 static CODE_BLOCK: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?sm)```(?P<lang>\S*)\n(?P<code>.*)```").unwrap());
 
