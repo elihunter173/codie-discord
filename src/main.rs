@@ -1,21 +1,19 @@
 mod bot;
 mod lang;
+mod logging;
 
 use std::{collections::HashMap, convert::TryInto, env, time::Duration};
 
 use once_cell::sync::Lazy;
+use regex::Regex;
 use serenity::{
     client::Client,
     model::{channel::Message, event::MessageUpdateEvent, id::MessageId},
     prelude::{Context, EventHandler},
     utils::Color,
 };
-
 use shiplift::Docker;
-
 use sled::Tree;
-
-use regex::Regex;
 
 use crate::{bot::CodeRunner, lang::LangRef};
 
@@ -149,8 +147,6 @@ impl EventHandler for Handler {
         if msg.is_own(&ctx).await {
             return;
         }
-
-        log::debug!("{}", msg.content);
 
         if msg.content == "#!help" {
             // We extract this because otherwise rustfmt falis

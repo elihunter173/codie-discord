@@ -7,7 +7,7 @@ use regex::Regex;
 use shiplift::{tty::TtyChunk, Docker};
 use unicase::Ascii;
 
-use crate::lang::LangRef;
+use crate::{lang::LangRef, logging::Loggable};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct Output {
@@ -156,7 +156,7 @@ impl CodeRunner {
             .copy_file_into(Path::new("/tmp/code"), code.as_bytes())
             .await?;
 
-        log::info!("Starting container {}", container.id());
+        log::info!("{} starting", container.as_log());
         container.start().await?;
 
         async fn stop_container(container: &shiplift::Container<'_>) {
@@ -186,13 +186,13 @@ impl CodeRunner {
         let exit = match run_fut.await {
             // Finished successfully within time
             Ok(Ok(exit)) => {
-                log::info!("Container finished {}", container.id());
+                log::info!("{} finished", container.as_log());
                 exit
             }
             Ok(Err(_overflowed)) => {
                 log::warn!(
-                    "Force stopping container {}. Reason: overflowed output",
-                    container.id()
+                    "{} force-stopping. Reason: overflowed output",
+                    container.as_log()
                 );
                 stop_container(&container).await;
                 container.wait().await?
@@ -200,8 +200,8 @@ impl CodeRunner {
             // Timed out
             Err(_elapsed) => {
                 log::warn!(
-                    "Force stopping container {}. Reason: exceeded timeout",
-                    container.id()
+                    "{} force-stopping. Reason: exceeded timeout",
+                    container.as_log()
                 );
                 stop_container(&container).await;
                 container.wait().await?
@@ -215,7 +215,7 @@ impl CodeRunner {
         container
             .remove(shiplift::RmContainerOptions::builder().force(true).build())
             .await?;
-        log::info!("Container removed {}", container.id());
+        log::info!("{} removed", container.as_log());
         Ok(Output {
             status: exit.status_code,
             tty: output_builder.build(),
