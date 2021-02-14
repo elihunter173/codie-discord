@@ -270,9 +270,10 @@ sys.exit(123)
         );
     }
 
+    // TODO: This test is flaky...
     #[tokio::test]
     async fn test_ordering() {
-        // This code causes issues with python buffering sometimes...
+        // This code causes issues with python buffering sometimes
         let code = r#"
 import os
 print(0)
@@ -285,6 +286,23 @@ print(2)
             Output {
                 status: 0,
                 tty: "0\n1\n2\n".into(),
+            }
+        );
+    }
+
+    // TODO: This test is flaky...
+    #[tokio::test]
+    async fn test_no_newline() {
+        let code = r#"
+import sys
+sys.stdout.write("x" * 1000)
+"#;
+        let output = TEST_RUNNER.run_code(&Python, code).await.unwrap();
+        assert_eq!(
+            output,
+            Output {
+                status: 0,
+                tty: "x".repeat(1000).into(),
             }
         );
     }
