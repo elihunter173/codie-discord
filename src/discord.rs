@@ -1,7 +1,11 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serenity::{
-    model::{channel::Message, event::MessageUpdateEvent},
+    model::{
+        channel::Message,
+        event::MessageUpdateEvent,
+        gateway::{Activity, Ready},
+    },
     prelude::{Context, EventHandler},
     utils::Color,
 };
@@ -184,5 +188,9 @@ print("Hello, World!")
                 .await
                 .expect("failed to reply");
         }
+    }
+
+    async fn ready(&self, ctx: Context, _data_about_bot: Ready) {
+        ctx.set_activity(Activity::listening("#!help")).await;
     }
 }
