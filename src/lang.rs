@@ -36,10 +36,10 @@ macro_rules! test_lang {
         paste::paste! {
             #[tokio::test]
             async fn [<test_hello_world_ $lang:lower>]() {
-                let output = crate::bot::TEST_RUNNER.run_code(&$lang, $code).await.unwrap();
+                let output = $crate::runner::TEST_RUNNER.run_code(&$lang, $code).await.unwrap();
                 assert_eq!(
                     output,
-                    crate::bot::Output {
+                    $crate::runner::Output {
                         status: 0,
                         tty: "Hello, World!\n".into(),
                     }

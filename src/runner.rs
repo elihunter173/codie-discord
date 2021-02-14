@@ -9,100 +9,6 @@ use unicase::Ascii;
 
 use crate::{lang::LangRef, logging::Loggable};
 
-#[derive(Debug, Eq, PartialEq)]
-pub struct Output {
-    pub status: u64,
-    pub tty: Box<str>,
-}
-
-impl Output {
-    pub fn success(&self) -> bool {
-        self.status == 0
-    }
-}
-
-impl fmt::Display for Output {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Replace ``` with something that looks really similar
-        fn escape_codeblock(code: &str) -> Cow<str> {
-            static CODE_BLOCK_FENCE: Lazy<Regex> = Lazy::new(|| Regex::new(r"```").unwrap());
-            CODE_BLOCK_FENCE.replace_all(code, "\u{02CB}\u{02CB}\u{02CB}")
-        }
-
-        if !self.success() {
-            write!(f, "**EXIT STATUS:** {}\n", self.status)?;
-        }
-
-        write!(f, "```\n{}```", escape_codeblock(&self.tty))?;
-        Ok(())
-    }
-}
-
-struct OutputBuilder<S>
-where
-    S: Stream<Item = shiplift::Result<TtyChunk>> + Unpin,
-{
-    buf: Vec<u8>,
-    codepoints: usize,
-    logs: Option<S>,
-}
-
-const MAX_OUTPUT_CODEPOINTS: usize = serenity::constants::MESSAGE_CODE_LIMIT as usize
-    - "mentions_cost_22_chars: **EXIT STATUS:** 255\n```...```".len();
-
-impl<S> OutputBuilder<S>
-where
-    S: Stream<Item = shiplift::Result<TtyChunk>> + Unpin,
-{
-    fn new(logs: S) -> Self {
-        Self {
-            buf: Vec::new(),
-            codepoints: 0,
-            logs: Some(logs),
-        }
-    }
-
-    fn build(self) -> Box<str> {
-        String::from_utf8(self.buf).unwrap().into_boxed_str()
-    }
-
-    async fn extend(&mut self) -> Result<(), ()> {
-        let logs = match self.logs.as_mut() {
-            Some(logs) => logs,
-            None => return Err(()),
-        };
-
-        // TODO: Sometimes logs.next.await() == None even though not all the logs have been
-        // returned... I think docker is closing our connection incorrectly?
-        // To reproduce, run this until she outputs nothing
-        // @Codie ```py
-        // import sys
-        // sys.stdout.write("x" * 1946)
-        // ```
-        while let Some(chunk) = logs.next().await {
-            match chunk.unwrap() {
-                TtyChunk::StdOut(ref mut bytes) | TtyChunk::StdErr(ref mut bytes) => {
-                    // If we can count the codepoints, count them appropriately. If we can't,
-                    // assume the worst case where each byte is a codepoint
-                    self.codepoints += match str::from_utf8(bytes) {
-                        Ok(s) => s.chars().count(),
-                        Err(_) => bytes.len(),
-                    };
-                    if self.codepoints > MAX_OUTPUT_CODEPOINTS {
-                        self.logs = None;
-                        self.buf.extend_from_slice(b"...");
-                        return Err(());
-                    }
-                    self.buf.append(bytes);
-                }
-                TtyChunk::StdIn(_) => unreachable!(),
-            }
-        }
-        self.logs = None;
-        Ok(())
-    }
-}
-
 pub struct CodeRunner {
     pub docker: Docker,
     pub langs: HashMap<Ascii<&'static str>, LangRef>,
@@ -217,6 +123,100 @@ impl CodeRunner {
             status: exit.status_code,
             tty: output_builder.build(),
         })
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct Output {
+    pub status: u64,
+    pub tty: Box<str>,
+}
+
+impl Output {
+    pub fn success(&self) -> bool {
+        self.status == 0
+    }
+}
+
+impl fmt::Display for Output {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Replace ``` with something that looks really similar
+        fn escape_codeblock(code: &str) -> Cow<str> {
+            static CODE_BLOCK_FENCE: Lazy<Regex> = Lazy::new(|| Regex::new(r"```").unwrap());
+            CODE_BLOCK_FENCE.replace_all(code, "\u{02CB}\u{02CB}\u{02CB}")
+        }
+
+        if !self.success() {
+            write!(f, "**EXIT STATUS:** {}\n", self.status)?;
+        }
+
+        write!(f, "```\n{}```", escape_codeblock(&self.tty))?;
+        Ok(())
+    }
+}
+
+struct OutputBuilder<S>
+where
+    S: Stream<Item = shiplift::Result<TtyChunk>> + Unpin,
+{
+    buf: Vec<u8>,
+    codepoints: usize,
+    logs: Option<S>,
+}
+
+const MAX_OUTPUT_CODEPOINTS: usize = serenity::constants::MESSAGE_CODE_LIMIT as usize
+    - "mentions_cost_22_chars: **EXIT STATUS:** 255\n```...```".len();
+
+impl<S> OutputBuilder<S>
+where
+    S: Stream<Item = shiplift::Result<TtyChunk>> + Unpin,
+{
+    fn new(logs: S) -> Self {
+        Self {
+            buf: Vec::new(),
+            codepoints: 0,
+            logs: Some(logs),
+        }
+    }
+
+    fn build(self) -> Box<str> {
+        String::from_utf8(self.buf).unwrap().into_boxed_str()
+    }
+
+    async fn extend(&mut self) -> Result<(), ()> {
+        let logs = match self.logs.as_mut() {
+            Some(logs) => logs,
+            None => return Err(()),
+        };
+
+        // TODO: Sometimes logs.next.await() == None even though not all the logs have been
+        // returned... I think docker is closing our connection incorrectly?
+        // To reproduce, run this until she outputs nothing
+        // @Codie ```py
+        // import sys
+        // sys.stdout.write("x" * 1946)
+        // ```
+        while let Some(chunk) = logs.next().await {
+            match chunk.unwrap() {
+                TtyChunk::StdOut(ref mut bytes) | TtyChunk::StdErr(ref mut bytes) => {
+                    // If we can count the codepoints, count them appropriately. If we can't,
+                    // assume the worst case where each byte is a codepoint
+                    self.codepoints += match str::from_utf8(bytes) {
+                        Ok(s) => s.chars().count(),
+                        Err(_) => bytes.len(),
+                    };
+                    if self.codepoints > MAX_OUTPUT_CODEPOINTS {
+                        self.logs = None;
+                        self.buf.extend_from_slice(b"...");
+                        return Err(());
+                    }
+                    self.buf.append(bytes);
+                }
+                TtyChunk::StdIn(_) => unreachable!(),
+            }
+        }
+        self.logs = None;
+        Ok(())
     }
 }
 
