@@ -152,18 +152,22 @@ impl EventHandler for Handler {
         &self,
         ctx: Context,
         _old_if_available: Option<Message>,
-        new: Option<Message>,
-        _event: MessageUpdateEvent,
+        _new: Option<Message>,
+        event: MessageUpdateEvent,
     ) {
         // TODO: (This is a discord bug.) For some reason she seems to ping the user when the
         // message is updated but not when it is initially sent. Preferably she would never ping
         // the user because that can be annoying.
 
-        let msg = match new {
-            Some(msg) => msg,
-            None => return,
-        };
+        let msg = event
+            .channel_id
+            .message(&ctx, event.id)
+            .await
+            .expect("failed to get handle on message");
 
+        if msg.is_own(&ctx).await {
+            return;
+        }
         if !should_run(&ctx, &msg).await {
             return;
         }
@@ -246,6 +250,9 @@ print("Hello, World!")
                         .reply(&ctx, body)
                         .await
                         .expect("failed to reply to message");
+                    if let Some(_) = self.message_ids.insert(msg.id, reply.id).unwrap() {
+                        panic!("colliding message ids");
+                    }
                     while let Some(ref body) = rx.recv().await {
                         match reply.edit(&ctx, |builder| builder.content(body)).await {
                             Ok(_) => {}
@@ -256,9 +263,6 @@ print("Hello, World!")
                                     .expect("failed to edit message");
                             }
                         }
-                    }
-                    if let Some(_) = self.message_ids.insert(msg.id, reply.id).unwrap() {
-                        panic!("colliding message ids");
                     }
                 }
             );
