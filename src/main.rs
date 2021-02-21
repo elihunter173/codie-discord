@@ -2,6 +2,7 @@ mod db;
 mod discord;
 mod lang;
 mod logging;
+mod options_parser;
 mod runner;
 
 use std::{collections::HashMap, env, time::Duration};
