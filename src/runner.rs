@@ -1,13 +1,31 @@
 use core::fmt;
-use std::{borrow::Cow, collections::HashMap, path::Path, str, time::Duration};
+use std::{borrow::Cow, collections::HashMap, str, time::Duration};
 
 use futures::{Stream, StreamExt};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use shiplift::{tty::TtyChunk, Docker};
+use tokio::{fs::File, io::AsyncWriteExt};
 use unicase::Ascii;
 
 use crate::{lang::LangRef, logging::Loggable};
+
+#[derive(Debug)]
+pub struct UnrecognizedContainer;
+
+impl fmt::Display for UnrecognizedContainer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl std::error::Error for UnrecognizedContainer {}
+
+pub struct RunSpec {
+    pub code_path: &'static str,
+    pub image_name: String,
+    pub dockerfile: String,
+}
 
 pub struct CodeRunner {
     pub docker: Docker,
@@ -17,46 +35,73 @@ pub struct CodeRunner {
     pub memory: u64,
 }
 
-// TODO: Support options [[like this]]
-// @Codie [[version="python2"]] ```py
-// print "hi"
-// ```
 impl CodeRunner {
     pub fn get_lang_by_code(&self, code: &str) -> Option<LangRef> {
         self.langs.get(&Ascii::new(code)).copied()
     }
 
-    pub async fn run_code<'s>(&'s self, lang: LangRef, code: &'s str) -> anyhow::Result<Output> {
-        let container = {
-            let response = self
-                .docker
-                .containers()
-                .create(
-                    // TODO: Restrict disk usage
-                    &lang
-                        .container_options()
-                        // Run as user "nobody"
-                        .user("65534:65534")
-                        // Ensure that we are unprivileged
-                        .capabilities(vec![])
-                        .privileged(false)
-                        // No internet access
-                        .network_mode("none")
-                        // Be in a safe directory
-                        .working_dir("/tmp")
-                        // Don't take too many resources
-                        .cpus(self.cpus)
-                        .memory(self.memory)
-                        // Stop immediately
-                        .stop_signal("SIGKILL")
-                        .stop_timeout(Duration::from_nanos(0))
-                        .build(),
-                )
-                .await?;
-            shiplift::Container::new(&self.docker, response.id)
+    pub async fn build<'s>(&'s self, spec: &'s RunSpec) -> anyhow::Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        let file_path = dir.path().join("Dockerfile");
+        let mut file = File::create(file_path).await?;
+        file.write_all(spec.dockerfile.as_bytes()).await?;
+        file.flush().await?;
+
+        let dir_str = dir.path().to_str().unwrap();
+
+        let image_name = format!("codie/{}", spec.image_name);
+        log::info!("Building {}", image_name);
+        let images = self.docker.images();
+        let build_opts = shiplift::BuildOptions::builder(dir_str)
+            .tag(image_name)
+            .build();
+        let mut stream = images.build(&build_opts);
+        while let Some(build_result) = stream.next().await {
+            match build_result {
+                Ok(output) => match output.get("error") {
+                    Some(_) => anyhow::bail!("build error: {:?}", output),
+                    None => log::debug!("{:?}", output),
+                },
+                Err(e) => anyhow::bail!("failed while building: {:?}", e),
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn run_code<'s>(
+        &'s self,
+        spec: &'s RunSpec,
+        code: &'s str,
+    ) -> anyhow::Result<Output> {
+        // TODO: Restrict disk usage
+        let container_opts =
+            shiplift::ContainerOptions::builder(&format!("codie/{}", &spec.image_name))
+                // Run as user "nobody"
+                .user("65534:65534")
+                // Ensure that we are unprivileged
+                .capabilities(vec![])
+                .privileged(false)
+                // No internet access
+                .network_mode("none")
+                // Be in a safe directory
+                .working_dir("/tmp")
+                // Don't take too many resources
+                .cpus(self.cpus)
+                .memory(self.memory)
+                // Stop immediately
+                .stop_signal("SIGKILL")
+                .stop_timeout(Duration::from_nanos(0))
+                .build();
+        let container = match self.docker.containers().create(&container_opts).await {
+            Ok(response) => shiplift::Container::new(&self.docker, response.id),
+            Err(shiplift::Error::Fault { code, .. }) if code == 404 => {
+                return Err(UnrecognizedContainer.into());
+            }
+            Err(err) => return Err(err.into()),
         };
         container
-            .copy_file_into(Path::new("/tmp/code"), code.as_bytes())
+            .copy_file_into(spec.code_path, code.as_bytes())
             .await?;
 
         log::info!("{} starting", container.as_log());
@@ -190,12 +235,7 @@ where
         };
 
         // TODO: Sometimes logs.next.await() == None even though not all the logs have been
-        // returned... I think docker is closing our connection incorrectly?
-        // To reproduce, run this until she outputs nothing
-        // @Codie ```py
-        // import sys
-        // sys.stdout.write("x" * 1946)
-        // ```
+        // returned... I think docker is closing our connection incorrectly? See `test_no_newline`
         while let Some(chunk) = logs.next().await {
             match chunk.unwrap() {
                 TtyChunk::StdOut(ref mut bytes) | TtyChunk::StdErr(ref mut bytes) => {
@@ -221,15 +261,29 @@ where
 }
 
 #[cfg(test)]
-pub(crate) static TEST_RUNNER: once_cell::sync::Lazy<CodeRunner> =
-    once_cell::sync::Lazy::new(|| CodeRunner {
-        docker: Docker::new(),
-        timeout: Duration::from_secs(10),
-        // As much as needed
-        cpus: 0.0,
-        memory: 0,
-        langs: HashMap::new(),
-    });
+pub(crate) async fn test_run<'s>(lang: LangRef, code: &'s str) -> anyhow::Result<Output> {
+    static TEST_RUNNER: once_cell::sync::Lazy<CodeRunner> =
+        once_cell::sync::Lazy::new(|| CodeRunner {
+            docker: Docker::new(),
+            timeout: Duration::from_secs(10),
+            // As much as needed
+            cpus: 0.0,
+            memory: 0,
+            langs: HashMap::new(),
+        });
+
+    let spec = lang.run_spec(Default::default()).unwrap();
+    match TEST_RUNNER.run_code(&spec, code).await {
+        Ok(output) => Ok(output),
+        Err(err) => match err.downcast_ref::<UnrecognizedContainer>() {
+            Some(_) => {
+                TEST_RUNNER.build(&spec).await.unwrap();
+                TEST_RUNNER.run_code(&spec, code).await
+            }
+            None => Err(err),
+        },
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -238,10 +292,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_timeout() {
-        let output = TEST_RUNNER
-            .run_code(&Python, "while True: pass")
-            .await
-            .unwrap();
+        let output = test_run(&Python, "while True: pass").await.unwrap();
         assert_eq!(
             output,
             Output {
@@ -260,7 +311,7 @@ print('stdout', file=sys.stdout)
 print('stderr', file=sys.stderr)
 sys.exit(123)
 "#;
-        let output = TEST_RUNNER.run_code(&Python, code).await.unwrap();
+        let output = test_run(&Python, code).await.unwrap();
         assert_eq!(
             output,
             Output {
@@ -280,7 +331,7 @@ print(0)
 os.system("echo 1")
 print(2)
 "#;
-        let output = TEST_RUNNER.run_code(&Python, code).await.unwrap();
+        let output = test_run(&Python, code).await.unwrap();
         assert_eq!(
             output,
             Output {
@@ -297,7 +348,7 @@ print(2)
 import sys
 sys.stdout.write("x" * 1000)
 "#;
-        let output = TEST_RUNNER.run_code(&Python, code).await.unwrap();
+        let output = test_run(&Python, code).await.unwrap();
         assert_eq!(
             output,
             Output {

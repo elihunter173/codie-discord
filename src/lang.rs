@@ -1,18 +1,22 @@
-use std::fmt::Display;
+use std::fmt;
 
-use shiplift::{builder::ContainerOptionsBuilder, ContainerOptions};
+use thiserror::Error;
 use unicase::Ascii;
 
-pub trait Language: Display {
-    // const HELP: &'static str;
-    // const DISPLAY: &'static str;
-    // Used to notify
-    // const FILENAME: &'static str;
-    // const HELLO_WORLD: &'static str;
-    // const CODES: &'static [&'static str];
+use crate::{options_parser::Options, runner::RunSpec};
+
+#[derive(Error, Debug)]
+pub enum OptionsError {
+    #[error("unrecognized key `{0:?}`")]
+    UnknownKeys(Vec<String>),
+    #[error("unrecognized values `{0:?}`")]
+    UnknownValue(String),
+}
+
+pub trait Language: fmt::Display {
     // From https://github.com/highlightjs/highlight.js/blob/master/SUPPORTED_LANGUAGES.md.
     fn codes(&self) -> &[Ascii<&str>];
-    fn container_options(&self) -> ContainerOptionsBuilder;
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError>;
 }
 
 pub type LangRef = &'static (dyn Language + Send + Sync);
@@ -22,7 +26,7 @@ macro_rules! make_lang {
     ($lang:ident) => {
         pub struct $lang;
         inventory::submit!(&$lang as LangRef);
-        impl Display for $lang {
+        impl fmt::Display for $lang {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 write!(f, stringify!($lang))
             }
@@ -36,7 +40,7 @@ macro_rules! test_lang {
         paste::paste! {
             #[tokio::test]
             async fn [<test_hello_world_ $lang:lower>]() {
-                let output = $crate::runner::TEST_RUNNER.run_code(&$lang, $code).await.unwrap();
+                let output = $crate::runner::test_run(&$lang, $code).await.unwrap();
                 assert_eq!(
                     output,
                     $crate::runner::Output {
@@ -50,8 +54,8 @@ macro_rules! test_lang {
 }
 
 macro_rules! count {
-    ($x:literal) => (1);
-    ($($xs:literal),*) => (0 $(+ count!($xs))*);
+    ($x:tt) => (1);
+    ($($xs:tt),*) => (0 $(+ count!($xs))*);
 }
 
 macro_rules! codes {
@@ -65,108 +69,217 @@ macro_rules! codes {
     )
 }
 
+macro_rules! bind_opts {
+    ( $map:expr => {$( $vars:ident $(or $default:literal)? ),*$(,)?} ) => (
+        #[allow(unused_parens, unused_mut)]
+        let ($($vars),*) = {
+            let mut m = $map;
+            let tup = ($( m.remove(stringify!($vars)) $(.unwrap_or(String::from($default)))? ),*);
+            if !m.is_empty() {
+                return Err(OptionsError::UnknownKeys(m.keys().map(|&s| s.to_owned()).collect()));
+            }
+            tup
+        };
+    )
+}
+
+make_lang!(Sh);
+impl Language for Sh {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["sh"]
+    }
+    fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "sh".to_owned(),
+            code_path: "/tmp/run.sh",
+            dockerfile: "
+FROM alpine:3.13
+CMD sh /tmp/run.sh
+"
+            .to_owned(),
+        })
+    }
+}
+test_lang!(Sh, "echo 'Hello, World!'");
+
 make_lang!(Bash);
 impl Language for Bash {
     fn codes(&self) -> &[Ascii<&str>] {
-        codes!["bash", "sh", "zsh"]
+        codes!["bash"]
     }
-    fn container_options(&self) -> ContainerOptionsBuilder {
-        let mut builder = ContainerOptions::builder("bash");
-        builder.cmd(vec!["bash", "code"]);
-        builder
+    fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "bash".to_owned(),
+            code_path: "/tmp/run.sh",
+            dockerfile: "
+FROM alpine:3.13
+RUN apk add --no-cache bash
+CMD bash /tmp/run.sh
+"
+            .to_owned(),
+        })
     }
 }
 test_lang!(Bash, "echo 'Hello, World!'");
 
-make_lang!(C);
-impl Language for C {
+make_lang!(Zsh);
+impl Language for Zsh {
     fn codes(&self) -> &[Ascii<&str>] {
-        codes!["c", "h"]
+        codes!["zsh"]
     }
-    fn container_options(&self) -> ContainerOptionsBuilder {
-        let mut builder = ContainerOptions::builder("gcc");
-        builder.cmd(vec![
-            "sh",
-            "-c",
-            "gcc -Wall -Wextra -x c code -o exe && ./exe",
-        ]);
-        builder
+    fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "zsh".to_owned(),
+            code_path: "/tmp/run.sh",
+            dockerfile: "
+FROM alpine:3.13
+RUN apk add --no-cache zsh
+CMD zsh /tmp/run.sh
+"
+            .to_owned(),
+        })
     }
 }
-test_lang!(
-    C,
-    r#"
-#include <stdio.h>
-int main() {
-    printf("Hello, World!\n");
-    return 0;
-}"#
-);
+test_lang!(Zsh, "echo 'Hello, World!'");
 
-make_lang!(Cpp);
-impl Language for Cpp {
+make_lang!(Python);
+impl Language for Python {
     fn codes(&self) -> &[Ascii<&str>] {
-        codes!["cpp", "hpp", "cc", "hh", "c++", "h++", "cxx", "hxx"]
+        codes!["python", "py", "gyp"]
     }
-    fn container_options(&self) -> ContainerOptionsBuilder {
-        let mut builder = ContainerOptions::builder("gcc");
-        builder.cmd(vec![
-            "sh",
-            "-c",
-            "g++ -Wall -Wextra -x c++ code -o exe && ./exe",
-        ]);
-        builder
-    }
-}
-test_lang!(
-    Cpp,
-    r#"
-    #include <iostream>
-int main() {
-    std::cout << "Hello, World!" << std::endl;
-    return 0;
-}"#
-);
+    fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "3.9", bundle or "none" });
+        match version.as_str() {
+            "3.9" | "3.8" | "3.7" | "3.6" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        };
+        let pip_install = match bundle.as_str() {
+            "none" => "",
+            "scipy" => "RUN pip install numpy scipy sympy",
+            _ => return Err(OptionsError::UnknownValue(bundle)),
+        };
 
-make_lang!(Fortran);
-impl Language for Fortran {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["fortran", "f90", "f95"]
-    }
-    fn container_options(&self) -> ContainerOptionsBuilder {
-        let mut builder = ContainerOptions::builder("gcc");
-        builder.cmd(vec![
-            "sh",
-            "-c",
-            // Fortran has a free-form vs fixed-form property for source code:
-            // https://people.cs.vt.edu/~asandu/Courses/MTU/CS2911/fortran_notes/node4.html
-            // free-form is the default for f90 and above. Normally it is picked by the extension.
-            // However, we don't have an extension here so we have to manually specify it with
-            // -ffree-form
-            "gfortran -Wall -Wextra -x f95 -ffree-form code -o exe && ./exe",
-        ]);
-        builder
+        Ok(RunSpec {
+            image_name: format!("python{}-{}", version, bundle),
+            code_path: "/tmp/run.py",
+            dockerfile: format!(
+                "
+FROM python:{version}-slim-buster
+ENV PYTHONUNBUFFERED=1
+{pip_install}
+CMD python /tmp/run.py
+",
+                version = version,
+                pip_install = pip_install,
+            ),
+        })
     }
 }
-test_lang!(
-    Fortran,
-    r#"
-program hello
-    write(*,'(a)') "Hello, World!"
-end program hello"#
-);
+test_lang!(Python, "print('Hello, World!')");
+
+make_lang!(JavaScript);
+impl Language for JavaScript {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["javascript", "js", "jsx"]
+    }
+    fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "15" });
+        match version.as_str() {
+            "15" | "14" | "12" | "10" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        };
+
+        Ok(RunSpec {
+            image_name: format!("nodejs{}", version),
+            code_path: "/tmp/index.js",
+            dockerfile: format!(
+                "
+FROM node:{version}-alpine
+CMD node /tmp/index.js
+",
+                version = version,
+            ),
+        })
+    }
+}
+test_lang!(JavaScript, "console.log('Hello, World!');");
+
+make_lang!(Perl);
+impl Language for Perl {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["perl", "pl", "pm"]
+    }
+    fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "perl".to_owned(),
+            code_path: "/tmp/run.pl",
+            dockerfile: "
+FROM perl:slim-buster
+CMD perl /tmp/run.pl
+"
+            .to_owned(),
+        })
+    }
+}
+test_lang!(Perl, "print 'Hello, World!\n'");
+
+make_lang!(Ruby);
+impl Language for Ruby {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["ruby", "rb", "gemspec", "podspec", "thor", "irb"]
+    }
+    fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
+        // TODO: Support JRuby
+        bind_opts!(opts => { version or "3.0" });
+        match version.as_str() {
+            "3.0" | "2.7" | "2.6" | "2.5" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        };
+
+        Ok(RunSpec {
+            image_name: format!("ruby{}", version),
+            code_path: "/tmp/run.rb",
+            dockerfile: format!(
+                "
+FROM ruby:{version}-alpine
+CMD ruby /tmp/run.rb
+",
+                version = version
+            ),
+        })
+    }
+}
+test_lang!(Ruby, "puts 'Hello, World!'");
 
 make_lang!(Go);
 impl Language for Go {
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["go", "golang"]
     }
-    fn container_options(&self) -> ContainerOptionsBuilder {
-        let mut builder = ContainerOptions::builder("golang:alpine");
-        builder
-            .cmd(vec!["sh", "-c", "ln -s code code.go && go run code.go"])
-            .env(["GOCACHE=/tmp/.cache/go"]);
-        builder
+    fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "1.16" });
+        match version.as_str() {
+            "1.16" | "1.15" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        };
+
+        Ok(RunSpec {
+            image_name: format!("golang{}", version),
+            code_path: "/tmp/main.go",
+            dockerfile: format!(
+                "
+FROM golang:{version}-alpine
+# So that we can build code
+ENV GOCACHE=/tmp/.cache/go
+CMD go run /tmp/main.go
+",
+                version = version
+            ),
+        })
     }
 }
 test_lang!(
@@ -184,16 +297,27 @@ impl Language for Java {
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["java", "jsp"]
     }
-    fn container_options(&self) -> ContainerOptionsBuilder {
-        let mut builder = ContainerOptions::builder("openjdk:alpine");
-        builder.cmd(vec![
-            "sh",
-            "-c",
-            // Grabs the classname from `public class Ident`
-            r"class=$(sed -n 's/public\s\+class\s\+\(\w\+\).*/\1/p' code);
-                  ln -s code $class.java && javac $class.java && java $class",
-        ]);
-        builder
+    fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "15" });
+        match version.as_str() {
+            "17" | "16" | "15" | "11" | "8" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        };
+
+        Ok(RunSpec {
+            image_name: format!("openjdk{}", version),
+            code_path: "/tmp/code",
+            dockerfile: format!(
+                r#"
+FROM openjdk:{version}-jdk-slim-buster
+# The sed command grabs the classname from `public class Ident`
+CMD sh -c \
+    'class=$(sed -n "s/public\s\+class\s\+\(\w\+\).*/\1/p" code); \
+     ln -s code $class.java && javac $class.java && java $class'
+"#,
+                version = version
+            ),
+        })
     }
 }
 test_lang!(
@@ -206,70 +330,84 @@ public class Hello {
 }"#
 );
 
-make_lang!(JavaScript);
-impl Language for JavaScript {
+make_lang!(C);
+impl Language for C {
     fn codes(&self) -> &[Ascii<&str>] {
-        codes!["javascript", "js", "jsx"]
+        codes!["c", "h"]
     }
-    fn container_options(&self) -> ContainerOptionsBuilder {
-        let mut builder = ContainerOptions::builder("node:alpine");
-        builder.cmd(vec!["node", "code"]);
-        builder
-    }
-}
-test_lang!(JavaScript, "console.log('Hello, World!');");
+    fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        // TODO: Support clang, CFLAGS, and different versions of gcc
 
-make_lang!(Perl);
-impl Language for Perl {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["perl", "pl", "pm"]
-    }
-    fn container_options(&self) -> ContainerOptionsBuilder {
-        let mut builder = ContainerOptions::builder("perl:slim");
-        builder.cmd(vec!["perl", "code"]);
-        builder
+        Ok(RunSpec {
+            image_name: "c-gcc".to_owned(),
+            code_path: "/tmp/main.c",
+            dockerfile: "
+FROM gcc:latest
+CMD sh -c 'gcc -Wall -Wextra main.c -o main && ./main'
+"
+            .to_owned(),
+        })
     }
 }
-test_lang!(Perl, "print 'Hello, World!\n'");
+test_lang!(
+    C,
+    r#"
+#include <stdio.h>
+int main() {
+    printf("Hello, World!\n");
+    return 0;
+}"#
+);
 
-make_lang!(Python);
-impl Language for Python {
+make_lang!(Cpp);
+impl Language for Cpp {
     fn codes(&self) -> &[Ascii<&str>] {
-        codes!["python", "py", "gyp"]
+        codes!["cpp", "hpp", "cc", "hh", "c++", "h++", "cxx", "hxx"]
     }
-    fn container_options(&self) -> ContainerOptionsBuilder {
-        let mut builder = ContainerOptions::builder("python:alpine");
-        // Make python run unbuffered. If you don't then we get weird orderings of messages
-        builder
-            .cmd(vec!["python", "code"])
-            .env(["PYTHONUNBUFFERED=1"]);
-        builder
-    }
-}
-test_lang!(Python, "print('Hello, World!')");
+    fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        // TODO: Support clang, CFLAGS, and different versions of gcc
 
-make_lang!(Ruby);
-impl Language for Ruby {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["ruby", "rb", "gemspec", "podspec", "thor", "irb"]
-    }
-    fn container_options(&self) -> ContainerOptionsBuilder {
-        let mut builder = ContainerOptions::builder("ruby:alpine");
-        builder.cmd(vec!["ruby", "code"]);
-        builder
+        Ok(RunSpec {
+            image_name: "cpp-gcc".to_owned(),
+            code_path: "/tmp/main.cpp",
+            dockerfile: "
+FROM gcc:latest
+CMD sh -c 'g++ -Wall -Wextra main.cpp -o main && ./main'
+"
+            .to_owned(),
+        })
     }
 }
-test_lang!(Ruby, "puts 'Hello, World!'");
+test_lang!(
+    Cpp,
+    r#"
+    #include <iostream>
+int main() {
+    std::cout << "Hello, World!" << std::endl;
+    return 0;
+}"#
+);
 
 make_lang!(Rust);
 impl Language for Rust {
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["rust", "rs"]
     }
-    fn container_options(&self) -> ContainerOptionsBuilder {
-        let mut builder = ContainerOptions::builder("rust:alpine");
-        builder.cmd(vec!["sh", "-c", "rustc code -o exe && ./exe"]);
-        builder
+    fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        // TODO: Support rust versions and nightly features
+
+        Ok(RunSpec {
+            image_name: "rust".to_owned(),
+            code_path: "/tmp/main.rs",
+            dockerfile: "
+FROM rust:alpine
+CMD sh -c 'rustc main.rs -o main && ./main'
+"
+            .to_owned(),
+        })
     }
 }
 test_lang!(
@@ -278,4 +416,31 @@ test_lang!(
 fn main() {
     println!("Hello, World!");
 }"#
+);
+
+make_lang!(Fortran);
+impl Language for Fortran {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["fortran", "f90", "f95"]
+    }
+    fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+
+        Ok(RunSpec {
+            image_name: "fortran".to_owned(),
+            code_path: "/tmp/main.f95",
+            dockerfile: "
+FROM gcc:latest
+CMD sh -c 'gfortran -Wall -Wextra main.f95 -o main && ./main'
+"
+            .to_owned(),
+        })
+    }
+}
+test_lang!(
+    Fortran,
+    r#"
+program hello
+    write(*,'(a)') "Hello, World!"
+end program hello"#
 );
