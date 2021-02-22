@@ -43,18 +43,15 @@ fn parse_message(msg: &str) -> Option<RunMessage> {
     static MENTION_OPTS: Lazy<Regex> = Lazy::new(|| Regex::new(r"`\[\[(?P<opts>.*)\]\]`").unwrap());
 
     static CMD_RUN_ALL: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(r"(?s)^#!run\s+(?P<opts>.*)\s+```(?P<lang>\S*)\n(?P<code>.*)```").unwrap()
+        Regex::new(r"(?s)^#!run\s+((?P<opts>.*)\s+)?```(?P<lang>\S*)\n(?P<code>.*)```").unwrap()
     });
 
     if msg.starts_with("#!run") {
-        match CMD_RUN_ALL.captures(msg) {
-            Some(caps) => Some(RunMessage {
-                opts: caps.name("opts").unwrap().as_str(),
-                lang: caps.name("lang").unwrap().as_str(),
-                code: caps.name("code").unwrap().as_str(),
-            }),
-            None => None,
-        }
+        CMD_RUN_ALL.captures(msg).map(|caps| RunMessage {
+            opts: caps.name("opts").map(|s| s.as_str()).unwrap_or(""),
+            lang: caps.name("lang").unwrap().as_str(),
+            code: caps.name("code").unwrap().as_str(),
+        })
     } else {
         let (lang, code) = match MENTION_CODE_LANG.captures(msg) {
             Some(caps) => (
@@ -296,7 +293,43 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_message_run_cmd() {
+    fn test_parse_message_mention_no_opts() {
+        assert_eq!(
+            parse_message("@Codie ```py\nprint('Hello, World!')\n```"),
+            Some(RunMessage {
+                lang: "py",
+                opts: "",
+                code: "print('Hello, World!')\n",
+            }),
+        );
+    }
+
+    #[test]
+    fn test_parse_message_mention_opts() {
+        assert_eq!(
+            parse_message("@Codie `[[version=3.8]]` ```py\nprint('Hello, World!')\n```"),
+            Some(RunMessage {
+                lang: "py",
+                opts: "version=3.8",
+                code: "print('Hello, World!')\n",
+            }),
+        );
+    }
+
+    #[test]
+    fn test_parse_message_run_cmd_no_opts() {
+        assert_eq!(
+            parse_message("#!run ```py\nprint('Hello, World!')\n```"),
+            Some(RunMessage {
+                lang: "py",
+                opts: "",
+                code: "print('Hello, World!')\n",
+            }),
+        );
+    }
+
+    #[test]
+    fn test_parse_message_run_cmd_opts() {
         assert_eq!(
             parse_message("#!run version=3.8 ```py\nprint('Hello, World!')\n```"),
             Some(RunMessage {
@@ -308,14 +341,10 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_message_mention() {
+    fn test_parse_message_run_cmd_nospace() {
         assert_eq!(
-            parse_message("@Codie `[[version=3.8]]` ```py\nprint('Hello, World!')\n```"),
-            Some(RunMessage {
-                lang: "py",
-                opts: "version=3.8",
-                code: "print('Hello, World!')\n",
-            }),
+            parse_message("#!run version=3.8```py\nprint('Hello, World!')\n```"),
+            None,
         );
     }
 }
