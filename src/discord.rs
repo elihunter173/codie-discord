@@ -26,7 +26,7 @@ pub struct Handler {
 }
 
 async fn should_run(ctx: &Context, msg: &Message) -> bool {
-    msg.content.starts_with("#!run") || msg.mentions_me(ctx).await.unwrap() || msg.is_private()
+    msg.content.starts_with("#!run") || msg.mentions_me(ctx).await.unwrap()
 }
 
 #[derive(Debug, Eq, PartialEq)]
