@@ -23,14 +23,17 @@ pub type LangRef = &'static (dyn Language + Send + Sync);
 inventory::collect!(LangRef);
 
 macro_rules! make_lang {
-    ($lang:ident) => {
+    ($lang:ident, $($name:tt)+) => {
         pub struct $lang;
         inventory::submit!(&$lang as LangRef);
         impl fmt::Display for $lang {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, stringify!($lang))
+                write!(f, $($name)*)
             }
         }
+    };
+    ($lang:ident) => {
+        make_lang!($lang, stringify!($lang));
     };
 }
 
@@ -191,7 +194,6 @@ impl Language for JavaScript {
             "15" | "14" | "12" | "10" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
-
         Ok(RunSpec {
             image_name: format!("nodejs{}", version),
             code_path: "/tmp/index.js",
@@ -397,7 +399,6 @@ impl Language for Java {
             "17" | "16" | "15" | "11" | "8" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
-
         Ok(RunSpec {
             image_name: format!("openjdk{}", version),
             code_path: "/tmp/code",
@@ -420,6 +421,34 @@ test_lang!(
 public class Hello {
     public static void main(String[] args) {
         System.out.println("Hello, World!");
+    }
+}"#
+);
+
+make_lang!(CSharp, "C#");
+impl Language for CSharp {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["csharp", "cs"]
+    }
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "csharp".to_owned(),
+            code_path: "/tmp/main.cs",
+            dockerfile: r#"
+FROM mono:6.12
+CMD ["sh", "-c", "mcs -out:main.exe main.cs && mono main.exe" ]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(
+    CSharp,
+    r#"
+class HelloWorld {
+    static void Main() {
+        System.Console.WriteLine("Hello, World!");
     }
 }"#
 );
@@ -454,7 +483,7 @@ int main() {
 }"#
 );
 
-make_lang!(Cpp);
+make_lang!(Cpp, "C++");
 impl Language for Cpp {
     fn codes(&self) -> &[Ascii<&str>] {
         codes!["cpp", "hpp", "cc", "hh", "c++", "h++", "cxx", "hxx"]
