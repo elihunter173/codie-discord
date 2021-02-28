@@ -592,6 +592,25 @@ CMD ["elixir", "run.exs"]
 }
 test_lang!(Elixir, "IO.puts \"Hello, World!\"");
 
+make_lang!(OCaml);
+impl Language for OCaml {
+    CODES!["ocaml", "ml"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "ocaml".to_owned(),
+            code_path: "main.ml",
+            dockerfile: r#"
+FROM alpine:3.13
+RUN apk add --no-cache ocaml
+CMD ["ocaml", "main.ml"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(OCaml, "print_string \"Hello, World!\n\"");
+
 make_lang!(C);
 impl Language for C {
     CODES!["c", "h"];
