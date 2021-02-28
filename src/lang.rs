@@ -255,6 +255,34 @@ CMD ruby /tmp/run.rb
 }
 test_lang!(Ruby, "puts 'Hello, World!'");
 
+make_lang!(Lua);
+impl Language for Lua {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["lua"]
+    }
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "5.4" });
+        // TODO: Add LuaJIT
+        match version.as_str() {
+            "5.4" | "5.3" | "5.2" | "5.1" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        };
+        Ok(RunSpec {
+            image_name: format!("lua{}", version),
+            code_path: "/tmp/run.lua",
+            dockerfile: format!(
+            "
+FROM alpine:edge
+RUN apk add --no-cache lua{version}
+CMD lua{version} /tmp/run.lua
+",
+            version = version
+            ),
+        })
+    }
+}
+test_lang!(Lua, "print('Hello, World!')");
+
 make_lang!(Go);
 impl Language for Go {
     fn codes(&self) -> &[Ascii<&str>] {
