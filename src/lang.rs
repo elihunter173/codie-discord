@@ -94,10 +94,10 @@ impl Language for Sh {
         Ok(RunSpec {
             image_name: "sh".to_owned(),
             code_path: "run.sh",
-            dockerfile: "
+            dockerfile: r#"
 FROM alpine:3.13
-CMD sh run.sh
-"
+CMD ["sh", "run.sh"]
+"#
             .to_owned(),
         })
     }
@@ -112,11 +112,11 @@ impl Language for Bash {
         Ok(RunSpec {
             image_name: "bash".to_owned(),
             code_path: "run.sh",
-            dockerfile: "
+            dockerfile: r#"
 FROM alpine:3.13
 RUN apk add --no-cache bash
-CMD bash run.sh
-"
+CMD ["bash", "run.sh"]
+"#
             .to_owned(),
         })
     }
@@ -131,11 +131,11 @@ impl Language for Zsh {
         Ok(RunSpec {
             image_name: "zsh".to_owned(),
             code_path: "run.sh",
-            dockerfile: "
+            dockerfile: r#"
 FROM alpine:3.13
 RUN apk add --no-cache zsh
-CMD zsh run.sh
-"
+CMD ["zsh", "run.sh"]
+"#
             .to_owned(),
         })
     }
@@ -160,12 +160,12 @@ impl Language for Python {
             image_name: format!("python{}-{}", version, bundle),
             code_path: "run.py",
             dockerfile: format!(
-                "
+                r#"
 FROM python:{version}-slim-buster
 ENV PYTHONUNBUFFERED=1
 {pip_install}
-CMD python run.py
-",
+CMD ["python", "run.py"]
+"#,
                 version = version,
                 pip_install = pip_install,
             ),
@@ -187,10 +187,10 @@ impl Language for JavaScript {
             image_name: format!("nodejs{}", version),
             code_path: "index.js",
             dockerfile: format!(
-                "
+                r#"
 FROM node:{version}-alpine
-CMD node index.js
-",
+CMD ["node", "index.js"]
+"#,
                 version = version,
             ),
         })
@@ -244,10 +244,10 @@ impl Language for Perl {
         Ok(RunSpec {
             image_name: "perl".to_owned(),
             code_path: "run.pl",
-            dockerfile: "
+            dockerfile: r#"
 FROM perl:slim-buster
-CMD perl run.pl
-"
+CMD ["perl", "run.pl"]
+"#
             .to_owned(),
         })
     }
@@ -286,10 +286,10 @@ impl Language for Ruby {
             image_name: format!("ruby{}", version),
             code_path: "run.rb",
             dockerfile: format!(
-                "
+                r#"
 FROM ruby:{version}-alpine
-CMD ruby run.rb
-",
+CMD ["ruby", "run.rb"]
+"#,
                 version = version
             ),
         })
@@ -311,11 +311,11 @@ impl Language for Lua {
             image_name: format!("lua{}", version),
             code_path: "run.lua",
             dockerfile: format!(
-                "
+                r#"
 FROM alpine:edge
 RUN apk add --no-cache lua{version}
-CMD lua{version} run.lua
-",
+CMD ["lua{version}", "run.lua"]
+"#,
                 version = version
             ),
         })
@@ -336,10 +336,10 @@ impl Language for Julia {
             image_name: format!("julia{}", version),
             code_path: "run.jl",
             dockerfile: format!(
-                "
+                r#"
 FROM julia:{version}
-CMD julia run.jl
-",
+CMD ["julia", "run.jl"]
+"#,
                 version = version
             ),
         })
@@ -378,12 +378,12 @@ impl Language for Go {
             image_name: format!("golang{}", version),
             code_path: "main.go",
             dockerfile: format!(
-                "
+                r#"
 FROM golang:{version}-alpine
 # So that we can build code
-ENV GOCACHE=.cache/go
-CMD go run main.go
-",
+ENV GOCACHE=/tmp/.cache/go
+CMD ["go", "run", "main.go"]
+"#,
                 version = version
             ),
         })
@@ -409,7 +409,7 @@ impl Language for Java {
             _ => return Err(OptionsError::UnknownValue(version)),
         };
         Ok(RunSpec {
-            image_name: format!("openjdk{}", version),
+            image_name: format!("java-openjdk{}", version),
             code_path: "code",
             dockerfile: format!(
                 r#"
@@ -601,10 +601,10 @@ impl Language for C {
         Ok(RunSpec {
             image_name: "c-gcc".to_owned(),
             code_path: "main.c",
-            dockerfile: "
+            dockerfile: r#"
 FROM gcc:latest
-CMD sh -c 'gcc -Wall -Wextra main.c -o main && ./main'
-"
+CMD ["sh", "-c", "gcc -Wall -Wextra main.c -o main && ./main"]
+"#
             .to_owned(),
         })
     }
@@ -628,10 +628,10 @@ impl Language for Cpp {
         Ok(RunSpec {
             image_name: "cpp-gcc".to_owned(),
             code_path: "main.cpp",
-            dockerfile: "
+            dockerfile: r#"
 FROM gcc:latest
-CMD sh -c 'g++ -Wall -Wextra main.cpp -o main && ./main'
-"
+CMD ["sh", "-c", "g++ -Wall -Wextra main.cpp -o main && ./main"]
+"#
             .to_owned(),
         })
     }
@@ -655,10 +655,10 @@ impl Language for Rust {
         Ok(RunSpec {
             image_name: "rust".to_owned(),
             code_path: "main.rs",
-            dockerfile: "
+            dockerfile: r#"
 FROM rust:alpine
-CMD sh -c 'rustc main.rs -o main && ./main'
-"
+CMD ["sh", "-c", "rustc main.rs -o main && ./main"]
+"#
             .to_owned(),
         })
     }
@@ -679,10 +679,10 @@ impl Language for Fortran {
         Ok(RunSpec {
             image_name: "fortran".to_owned(),
             code_path: "main.f95",
-            dockerfile: "
+            dockerfile: r#"
 FROM gcc:latest
-CMD sh -c 'gfortran -Wall -Wextra main.f95 -o main && ./main'
-"
+CMD ["sh", "-c", "gfortran -Wall -Wextra main.f95 -o main && ./main"]
+"#
             .to_owned(),
         })
     }
