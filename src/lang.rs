@@ -93,10 +93,10 @@ impl Language for Sh {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "sh".to_owned(),
-            code_path: "/tmp/run.sh",
+            code_path: "run.sh",
             dockerfile: "
 FROM alpine:3.13
-CMD sh /tmp/run.sh
+CMD sh run.sh
 "
             .to_owned(),
         })
@@ -111,11 +111,11 @@ impl Language for Bash {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "bash".to_owned(),
-            code_path: "/tmp/run.sh",
+            code_path: "run.sh",
             dockerfile: "
 FROM alpine:3.13
 RUN apk add --no-cache bash
-CMD bash /tmp/run.sh
+CMD bash run.sh
 "
             .to_owned(),
         })
@@ -130,11 +130,11 @@ impl Language for Zsh {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "zsh".to_owned(),
-            code_path: "/tmp/run.sh",
+            code_path: "run.sh",
             dockerfile: "
 FROM alpine:3.13
 RUN apk add --no-cache zsh
-CMD zsh /tmp/run.sh
+CMD zsh run.sh
 "
             .to_owned(),
         })
@@ -158,13 +158,13 @@ impl Language for Python {
         };
         Ok(RunSpec {
             image_name: format!("python{}-{}", version, bundle),
-            code_path: "/tmp/run.py",
+            code_path: "run.py",
             dockerfile: format!(
                 "
 FROM python:{version}-slim-buster
 ENV PYTHONUNBUFFERED=1
 {pip_install}
-CMD python /tmp/run.py
+CMD python run.py
 ",
                 version = version,
                 pip_install = pip_install,
@@ -185,11 +185,11 @@ impl Language for JavaScript {
         };
         Ok(RunSpec {
             image_name: format!("nodejs{}", version),
-            code_path: "/tmp/index.js",
+            code_path: "index.js",
             dockerfile: format!(
                 "
 FROM node:{version}-alpine
-CMD node /tmp/index.js
+CMD node index.js
 ",
                 version = version,
             ),
@@ -205,7 +205,7 @@ impl Language for TypeScript {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "typescript".to_owned(),
-            code_path: "/tmp/index.ts",
+            code_path: "index.ts",
             // This is taken from https://github.com/hayd/deno-docker/blob/master/distroless.dockerfile
             dockerfile: r#"
 FROM alpine:3.12.3
@@ -226,9 +226,9 @@ FROM gcr.io/distroless/cc
 COPY --from=0 /bin/deno /bin/deno
 
 ENV DENO_VERSION=1.7.2
-ENV DENO_DIR /tmp/deno
+ENV DENO_DIR deno
 ENV DENO_INSTALL_ROOT /usr/local
-CMD ["/bin/deno", "run", "--quiet", "/tmp/index.ts"]
+CMD ["/bin/deno", "run", "--quiet", "index.ts"]
 "#
             .to_owned(),
         })
@@ -243,10 +243,10 @@ impl Language for Perl {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "perl".to_owned(),
-            code_path: "/tmp/run.pl",
+            code_path: "run.pl",
             dockerfile: "
 FROM perl:slim-buster
-CMD perl /tmp/run.pl
+CMD perl run.pl
 "
             .to_owned(),
         })
@@ -261,7 +261,7 @@ impl Language for PHP {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "php".to_owned(),
-            code_path: "/tmp/run.php",
+            code_path: "run.php",
             dockerfile: r#"
 FROM php:8.0-alpine
 CMD ["php", "run.php"]
@@ -284,11 +284,11 @@ impl Language for Ruby {
         };
         Ok(RunSpec {
             image_name: format!("ruby{}", version),
-            code_path: "/tmp/run.rb",
+            code_path: "run.rb",
             dockerfile: format!(
                 "
 FROM ruby:{version}-alpine
-CMD ruby /tmp/run.rb
+CMD ruby run.rb
 ",
                 version = version
             ),
@@ -309,12 +309,12 @@ impl Language for Lua {
         };
         Ok(RunSpec {
             image_name: format!("lua{}", version),
-            code_path: "/tmp/run.lua",
+            code_path: "run.lua",
             dockerfile: format!(
                 "
 FROM alpine:edge
 RUN apk add --no-cache lua{version}
-CMD lua{version} /tmp/run.lua
+CMD lua{version} run.lua
 ",
                 version = version
             ),
@@ -334,11 +334,11 @@ impl Language for Julia {
         };
         Ok(RunSpec {
             image_name: format!("julia{}", version),
-            code_path: "/tmp/run.jl",
+            code_path: "run.jl",
             dockerfile: format!(
                 "
 FROM julia:{version}
-CMD julia /tmp/run.jl
+CMD julia run.jl
 ",
                 version = version
             ),
@@ -354,7 +354,7 @@ impl Language for R {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "r".to_owned(),
-            code_path: "/tmp/run.R",
+            code_path: "run.R",
             dockerfile: r#"
 FROM r-base
 CMD ["Rscript", "run.R"]
@@ -376,13 +376,13 @@ impl Language for Go {
         };
         Ok(RunSpec {
             image_name: format!("golang{}", version),
-            code_path: "/tmp/main.go",
+            code_path: "main.go",
             dockerfile: format!(
                 "
 FROM golang:{version}-alpine
 # So that we can build code
-ENV GOCACHE=/tmp/.cache/go
-CMD go run /tmp/main.go
+ENV GOCACHE=.cache/go
+CMD go run main.go
 ",
                 version = version
             ),
@@ -410,7 +410,7 @@ impl Language for Java {
         };
         Ok(RunSpec {
             image_name: format!("openjdk{}", version),
-            code_path: "/tmp/code",
+            code_path: "code",
             dockerfile: format!(
                 r#"
 FROM openjdk:{version}-jdk-slim-buster
@@ -441,7 +441,7 @@ impl Language for Kotlin {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "kotlin".to_owned(),
-            code_path: "/tmp/main.kt",
+            code_path: "main.kt",
             dockerfile: r#"
 FROM openjdk:11-jre-slim
 RUN apt-get update && apt-get install -y --no-install-recommends wget unzip && \
@@ -481,7 +481,7 @@ impl Language for Groovy {
         }
         Ok(RunSpec {
             image_name: format!("groovy{}", version),
-            code_path: "/tmp/run.groovy",
+            code_path: "run.groovy",
             dockerfile: format!(
                 r#"
 FROM groovy:{version}-jre11
@@ -501,7 +501,7 @@ impl Language for CSharp {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "csharp".to_owned(),
-            code_path: "/tmp/main.cs",
+            code_path: "main.cs",
             dockerfile: r#"
 FROM mono:6.12
 CMD ["sh", "-c", "mcs -out:main.exe main.cs && mono main.exe" ]
@@ -531,7 +531,7 @@ impl Language for Swift {
         };
         Ok(RunSpec {
             image_name: format!("swift{}", version),
-            code_path: "/tmp/main.swift",
+            code_path: "main.swift",
             dockerfile: format!(
                 r#"
 FROM swift:{version}
@@ -551,7 +551,7 @@ impl Language for Haskell {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "haskell".to_owned(),
-            code_path: "/tmp/main.hs",
+            code_path: "main.hs",
             dockerfile: r#"
 FROM haskell
 CMD ["runhaskell", "main.hs"]
@@ -579,7 +579,7 @@ impl Language for Elixir {
         }
         Ok(RunSpec {
             image_name: format!("elixir{}", version),
-            code_path: "/tmp/run.exs",
+            code_path: "run.exs",
             dockerfile: format!(
                 r#"
 FROM elixir:{version}-alpine
@@ -600,7 +600,7 @@ impl Language for C {
         // TODO: Support clang, CFLAGS, and different versions of gcc
         Ok(RunSpec {
             image_name: "c-gcc".to_owned(),
-            code_path: "/tmp/main.c",
+            code_path: "main.c",
             dockerfile: "
 FROM gcc:latest
 CMD sh -c 'gcc -Wall -Wextra main.c -o main && ./main'
@@ -627,7 +627,7 @@ impl Language for Cpp {
         // TODO: Support clang, CFLAGS, and different versions of gcc
         Ok(RunSpec {
             image_name: "cpp-gcc".to_owned(),
-            code_path: "/tmp/main.cpp",
+            code_path: "main.cpp",
             dockerfile: "
 FROM gcc:latest
 CMD sh -c 'g++ -Wall -Wextra main.cpp -o main && ./main'
@@ -654,7 +654,7 @@ impl Language for Rust {
         // TODO: Support rust versions and nightly features
         Ok(RunSpec {
             image_name: "rust".to_owned(),
-            code_path: "/tmp/main.rs",
+            code_path: "main.rs",
             dockerfile: "
 FROM rust:alpine
 CMD sh -c 'rustc main.rs -o main && ./main'
@@ -678,7 +678,7 @@ impl Language for Fortran {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "fortran".to_owned(),
-            code_path: "/tmp/main.f95",
+            code_path: "main.f95",
             dockerfile: "
 FROM gcc:latest
 CMD sh -c 'gfortran -Wall -Wextra main.f95 -o main && ./main'

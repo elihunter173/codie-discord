@@ -101,7 +101,7 @@ impl DockerRunner {
             Err(err) => return Err(err.into()),
         };
         container
-            .copy_file_into(spec.code_path, code.as_bytes())
+            .copy_file_into(format!("/tmp/{}", spec.code_path), code.as_bytes())
             .await?;
 
         log::info!("{} starting", container.as_log());
