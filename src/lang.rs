@@ -606,6 +606,32 @@ main = putStrLn "Hello, World!"
 "#
 );
 
+make_lang!(Elixir);
+impl Language for Elixir {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["elixir"]
+    }
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "1.11" });
+        match version.as_str() {
+            "1.11" | "1.10" | "1.9" | "1.8" | "1.7" | "1.6" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        }
+        Ok(RunSpec {
+            image_name: format!("elixir{}", version),
+            code_path: "/tmp/run.exs",
+            dockerfile: format!(
+                r#"
+FROM elixir:{version}-alpine
+CMD ["elixir", "run.exs"]
+"#,
+                version = version,
+                ),
+        })
+    }
+}
+test_lang!(Elixir, "IO.puts \"Hello, World!\"");
+
 make_lang!(C);
 impl Language for C {
     fn codes(&self) -> &[Ascii<&str>] {
