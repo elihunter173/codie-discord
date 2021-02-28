@@ -164,7 +164,6 @@ impl Language for Python {
             "scipy" => "RUN pip install numpy scipy sympy",
             _ => return Err(OptionsError::UnknownValue(bundle)),
         };
-
         Ok(RunSpec {
             image_name: format!("python{}-{}", version, bundle),
             code_path: "/tmp/run.py",
@@ -301,7 +300,6 @@ impl Language for Ruby {
             "3.0" | "2.7" | "2.6" | "2.5" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
-
         Ok(RunSpec {
             image_name: format!("ruby{}", version),
             code_path: "/tmp/run.rb",
@@ -382,7 +380,6 @@ impl Language for Go {
             "1.16" | "1.15" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
-
         Ok(RunSpec {
             image_name: format!("golang{}", version),
             code_path: "/tmp/main.go",
@@ -443,6 +440,44 @@ public class Hello {
         System.out.println("Hello, World!");
     }
 }"#
+);
+
+make_lang!(Kotlin);
+impl Language for Kotlin {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["kotlin", "kt"]
+    }
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "kotlin".to_owned(),
+            code_path: "/tmp/main.kt",
+            dockerfile: r#"
+FROM openjdk:11-jre-slim
+RUN apt-get update && apt-get install -y --no-install-recommends wget unzip && \
+    rm -rf /var/lib/apt/lists/* && \
+    cd /usr/lib && \
+    wget -q https://github.com/JetBrains/kotlin/releases/download/v1.4.10/kotlin-compiler-1.4.10.zip && \
+    unzip kotlin-compiler-*.zip && \
+    apt-get remove -y wget unzip && \
+    apt-get autoremove -y && \
+    apt-get autoclean -y && \
+    rm kotlin-compiler-*.zip && \
+    rm -f kotlinc/bin/*.bat
+ENV PATH $PATH:/usr/lib/kotlinc/bin
+CMD ["sh", "-c", "kotlinc main.kt -include-runtime -d main.jar && java -jar main.jar"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(
+    Kotlin,
+    r#"
+fun main() {
+    println("Hello, World!")
+}
+"#
 );
 
 make_lang!(CSharp, "C#");
@@ -507,7 +542,6 @@ impl Language for C {
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         // TODO: Support clang, CFLAGS, and different versions of gcc
-
         Ok(RunSpec {
             image_name: "c-gcc".to_owned(),
             code_path: "/tmp/main.c",
@@ -537,7 +571,6 @@ impl Language for Cpp {
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         // TODO: Support clang, CFLAGS, and different versions of gcc
-
         Ok(RunSpec {
             image_name: "cpp-gcc".to_owned(),
             code_path: "/tmp/main.cpp",
@@ -567,7 +600,6 @@ impl Language for Rust {
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         // TODO: Support rust versions and nightly features
-
         Ok(RunSpec {
             image_name: "rust".to_owned(),
             code_path: "/tmp/main.rs",
@@ -594,7 +626,6 @@ impl Language for Fortran {
     }
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
-
         Ok(RunSpec {
             image_name: "fortran".to_owned(),
             code_path: "/tmp/main.f95",
