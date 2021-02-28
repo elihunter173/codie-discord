@@ -453,6 +453,32 @@ class HelloWorld {
 }"#
 );
 
+make_lang!(Swift);
+impl Language for Swift {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["swift"]
+    }
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "5.3" });
+        match version.as_str() {
+            "5.3" | "5.2" | "5.1" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        };
+        Ok(RunSpec {
+            image_name: format!("swift{}", version),
+            code_path: "/tmp/main.swift",
+            dockerfile: format!(
+                r#"
+FROM swift:{version}
+CMD ["swift", "main.swift" ]
+"#,
+                version = version,
+            ),
+        })
+    }
+}
+test_lang!(Swift, "print(\"Hello, World!\")");
+
 make_lang!(C);
 impl Language for C {
     fn codes(&self) -> &[Ascii<&str>] {
