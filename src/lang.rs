@@ -271,17 +271,43 @@ impl Language for Lua {
             image_name: format!("lua{}", version),
             code_path: "/tmp/run.lua",
             dockerfile: format!(
-            "
+                "
 FROM alpine:edge
 RUN apk add --no-cache lua{version}
 CMD lua{version} /tmp/run.lua
 ",
-            version = version
+                version = version
             ),
         })
     }
 }
 test_lang!(Lua, "print('Hello, World!')");
+
+make_lang!(Julia);
+impl Language for Julia {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["julia", "julia-repl"]
+    }
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "1.6" });
+        match version.as_str() {
+            "1.6" | "1.5" | "1.0" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        };
+        Ok(RunSpec {
+            image_name: format!("julia{}", version),
+            code_path: "/tmp/run.jl",
+            dockerfile: format!(
+                "
+FROM julia:{version}
+CMD julia /tmp/run.jl
+",
+                version = version
+            ),
+        })
+    }
+}
+test_lang!(Julia, "println(\"Hello, World!\")");
 
 make_lang!(Go);
 impl Language for Go {
