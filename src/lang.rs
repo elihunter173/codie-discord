@@ -61,14 +61,14 @@ macro_rules! count {
     ($($xs:tt),*) => (0 $(+ count!($xs))*);
 }
 
-macro_rules! codes {
+macro_rules! CODES {
     ($($codes:literal),*) => (
-        {
+    fn codes(&self) -> &[Ascii<&str>] {
             // We declare a const and then take a ref to it because we want a 'static slice. If we
             // just directly took a ref then it would have a temporary lifetime
             const CODES: [Ascii<&str>; count!($($codes),*)] = [$(Ascii::new($codes)),*];
             &CODES
-        }
+    }
     )
 }
 
@@ -88,9 +88,7 @@ macro_rules! bind_opts {
 
 make_lang!(Sh);
 impl Language for Sh {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["sh"]
-    }
+    CODES!["sh"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
@@ -108,9 +106,7 @@ test_lang!(Sh, "echo 'Hello, World!'");
 
 make_lang!(Bash);
 impl Language for Bash {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["bash"]
-    }
+    CODES!["bash"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
@@ -129,9 +125,7 @@ test_lang!(Bash, "echo 'Hello, World!'");
 
 make_lang!(Zsh);
 impl Language for Zsh {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["zsh"]
-    }
+    CODES!["zsh"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
@@ -150,9 +144,7 @@ test_lang!(Zsh, "echo 'Hello, World!'");
 
 make_lang!(Python);
 impl Language for Python {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["python", "py", "gyp"]
-    }
+    CODES!["python", "py", "gyp"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => { version or "3.9", bundle or "scipy" });
         match version.as_str() {
@@ -184,9 +176,7 @@ test_lang!(Python, "print('Hello, World!')");
 
 make_lang!(JavaScript);
 impl Language for JavaScript {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["javascript", "js", "jsx"]
-    }
+    CODES!["javascript", "js", "jsx"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => { version or "15" });
         match version.as_str() {
@@ -210,9 +200,7 @@ test_lang!(JavaScript, "console.log('Hello, World!');");
 
 make_lang!(TypeScript);
 impl Language for TypeScript {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["typescript", "ts"]
-    }
+    CODES!["typescript", "ts"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
@@ -250,9 +238,7 @@ test_lang!(TypeScript, "console.log('Hello, World!');");
 
 make_lang!(Perl);
 impl Language for Perl {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["perl", "pl", "pm"]
-    }
+    CODES!["perl", "pl", "pm"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
@@ -270,9 +256,7 @@ test_lang!(Perl, "print 'Hello, World!\n'");
 
 make_lang!(PHP);
 impl Language for PHP {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["php", "php3", "php4", "php5", "php6", "php7", "php8"]
-    }
+    CODES!["php", "php3", "php4", "php5", "php6", "php7", "php8"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
@@ -290,9 +274,7 @@ test_lang!(PHP, "<?php echo 'Hello, World!\n' ?>");
 
 make_lang!(Ruby);
 impl Language for Ruby {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["ruby", "rb", "gemspec", "podspec", "thor", "irb"]
-    }
+    CODES!["ruby", "rb", "gemspec", "podspec", "thor", "irb"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         // TODO: Support JRuby
         bind_opts!(opts => { version or "3.0" });
@@ -317,9 +299,7 @@ test_lang!(Ruby, "puts 'Hello, World!'");
 
 make_lang!(Lua);
 impl Language for Lua {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["lua"]
-    }
+    CODES!["lua"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
         bind_opts!(opts => { version or "5.4" });
         // TODO: Add LuaJIT
@@ -345,9 +325,7 @@ test_lang!(Lua, "print('Hello, World!')");
 
 make_lang!(Julia);
 impl Language for Julia {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["julia", "julia-repl"]
-    }
+    CODES!["julia", "julia-repl"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
         bind_opts!(opts => { version or "1.6" });
         match version.as_str() {
@@ -371,9 +349,7 @@ test_lang!(Julia, "println(\"Hello, World!\")");
 
 make_lang!(R);
 impl Language for R {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["r"]
-    }
+    CODES!["r"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
@@ -391,9 +367,7 @@ test_lang!(R, "cat('Hello, World!\n')");
 
 make_lang!(Go);
 impl Language for Go {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["go", "golang"]
-    }
+    CODES!["go", "golang"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => { version or "1.16" });
         match version.as_str() {
@@ -427,9 +401,7 @@ func main() {
 
 make_lang!(Java);
 impl Language for Java {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["java", "jsp"]
-    }
+    CODES!["java", "jsp"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => { version or "15" });
         match version.as_str() {
@@ -464,9 +436,7 @@ public class Hello {
 
 make_lang!(Kotlin);
 impl Language for Kotlin {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["kotlin", "kt"]
-    }
+    CODES!["kotlin", "kt"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
@@ -502,9 +472,7 @@ fun main() {
 
 make_lang!(Groovy);
 impl Language for Groovy {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["groovy"]
-    }
+    CODES!["groovy"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
         bind_opts!(opts => { version or "3.0" });
         match version.as_str() {
@@ -528,9 +496,7 @@ test_lang!(Groovy, "println 'Hello, World!'");
 
 make_lang!(CSharp, "C#");
 impl Language for CSharp {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["csharp", "cs"]
-    }
+    CODES!["csharp", "cs"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
@@ -556,9 +522,7 @@ class HelloWorld {
 
 make_lang!(Swift);
 impl Language for Swift {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["swift"]
-    }
+    CODES!["swift"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
         bind_opts!(opts => { version or "5.3" });
         match version.as_str() {
@@ -582,9 +546,7 @@ test_lang!(Swift, "print(\"Hello, World!\")");
 
 make_lang!(Haskell);
 impl Language for Haskell {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["haskell", "hs"]
-    }
+    CODES!["haskell", "hs"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
@@ -608,9 +570,7 @@ main = putStrLn "Hello, World!"
 
 make_lang!(Elixir);
 impl Language for Elixir {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["elixir"]
-    }
+    CODES!["elixir"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
         bind_opts!(opts => { version or "1.11" });
         match version.as_str() {
@@ -626,7 +586,7 @@ FROM elixir:{version}-alpine
 CMD ["elixir", "run.exs"]
 "#,
                 version = version,
-                ),
+            ),
         })
     }
 }
@@ -634,9 +594,7 @@ test_lang!(Elixir, "IO.puts \"Hello, World!\"");
 
 make_lang!(C);
 impl Language for C {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["c", "h"]
-    }
+    CODES!["c", "h"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         // TODO: Support clang, CFLAGS, and different versions of gcc
@@ -663,9 +621,7 @@ int main() {
 
 make_lang!(Cpp, "C++");
 impl Language for Cpp {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["cpp", "hpp", "cc", "hh", "c++", "h++", "cxx", "hxx"]
-    }
+    CODES!["cpp", "hpp", "cc", "hh", "c++", "h++", "cxx", "hxx"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         // TODO: Support clang, CFLAGS, and different versions of gcc
@@ -692,9 +648,7 @@ int main() {
 
 make_lang!(Rust);
 impl Language for Rust {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["rust", "rs"]
-    }
+    CODES!["rust", "rs"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         // TODO: Support rust versions and nightly features
@@ -719,9 +673,7 @@ fn main() {
 
 make_lang!(Fortran);
 impl Language for Fortran {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["fortran", "f90", "f95"]
-    }
+    CODES!["fortran", "f90", "f95"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
