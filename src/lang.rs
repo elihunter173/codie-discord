@@ -580,6 +580,32 @@ CMD ["swift", "main.swift" ]
 }
 test_lang!(Swift, "print(\"Hello, World!\")");
 
+make_lang!(Haskell);
+impl Language for Haskell {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["haskell", "hs"]
+    }
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "haskell".to_owned(),
+            code_path: "/tmp/main.hs",
+            dockerfile: r#"
+FROM haskell
+CMD ["runhaskell", "main.hs"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(
+    Haskell,
+    r#"
+main :: IO ()
+main = putStrLn "Hello, World!"
+"#
+);
+
 make_lang!(C);
 impl Language for C {
     fn codes(&self) -> &[Ascii<&str>] {

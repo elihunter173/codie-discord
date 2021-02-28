@@ -35,7 +35,7 @@ async fn main() -> anyhow::Result<()> {
         language_text.push(format!("**{}:** {}", lang, codes.join(", ")));
     }
     // inventory::iter iterates in reverse order
-    language_text.reverse();
+    language_text.sort();
 
     let db = sled::open("data")?;
 
