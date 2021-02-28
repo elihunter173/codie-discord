@@ -369,6 +369,26 @@ CMD julia /tmp/run.jl
 }
 test_lang!(Julia, "println(\"Hello, World!\")");
 
+make_lang!(R);
+impl Language for R {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["r"]
+    }
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "r".to_owned(),
+            code_path: "/tmp/run.R",
+            dockerfile: r#"
+FROM r-base
+CMD ["Rscript", "run.R"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(R, "cat('Hello, World!\n')");
+
 make_lang!(Go);
 impl Language for Go {
     fn codes(&self) -> &[Ascii<&str>] {
