@@ -269,6 +269,26 @@ CMD perl /tmp/run.pl
 }
 test_lang!(Perl, "print 'Hello, World!\n'");
 
+make_lang!(PHP);
+impl Language for PHP {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["php", "php3", "php4", "php5", "php6", "php7", "php8"]
+    }
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "php".to_owned(),
+            code_path: "/tmp/run.php",
+            dockerfile: r#"
+FROM php:8.0-alpine
+CMD ["php", "run.php"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(PHP, "<?php echo 'Hello, World!\n' ?>");
+
 make_lang!(Ruby);
 impl Language for Ruby {
     fn codes(&self) -> &[Ascii<&str>] {
