@@ -207,6 +207,46 @@ CMD node /tmp/index.js
 }
 test_lang!(JavaScript, "console.log('Hello, World!');");
 
+make_lang!(TypeScript);
+impl Language for TypeScript {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["typescript", "ts"]
+    }
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "typescript".to_owned(),
+            code_path: "/tmp/index.ts",
+            // This is taken from https://github.com/hayd/deno-docker/blob/master/distroless.dockerfile
+            dockerfile: r#"
+FROM alpine:3.12.3
+
+ENV DENO_VERSION=1.7.2
+
+RUN apk add --virtual .download --no-cache curl \
+ && curl -fsSL https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip \
+         --output deno.zip \
+ && unzip deno.zip \
+ && rm deno.zip \
+ && chmod 755 deno \
+ && mv deno /bin/deno \
+ && apk del .download
+
+
+FROM gcr.io/distroless/cc
+COPY --from=0 /bin/deno /bin/deno
+
+ENV DENO_VERSION=1.7.2
+ENV DENO_DIR /tmp/deno
+ENV DENO_INSTALL_ROOT /usr/local
+CMD ["/bin/deno", "run", "--quiet", "/tmp/index.ts"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(TypeScript, "console.log('Hello, World!');");
+
 make_lang!(Perl);
 impl Language for Perl {
     fn codes(&self) -> &[Ascii<&str>] {
