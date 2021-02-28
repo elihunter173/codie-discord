@@ -480,6 +480,32 @@ fun main() {
 "#
 );
 
+make_lang!(Groovy);
+impl Language for Groovy {
+    fn codes(&self) -> &[Ascii<&str>] {
+        codes!["groovy"]
+    }
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "3.0" });
+        match version.as_str() {
+            "4.0" | "3.0" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        }
+        Ok(RunSpec {
+            image_name: format!("groovy{}", version),
+            code_path: "/tmp/run.groovy",
+            dockerfile: format!(
+                r#"
+FROM groovy:{version}-jre11
+CMD ["groovy", "run.groovy"]
+"#,
+                version = version,
+            ),
+        })
+    }
+}
+test_lang!(Groovy, "println 'Hello, World!'");
+
 make_lang!(CSharp, "C#");
 impl Language for CSharp {
     fn codes(&self) -> &[Ascii<&str>] {
