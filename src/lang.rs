@@ -42,7 +42,7 @@ macro_rules! test_lang {
         #[cfg(test)]
         paste::paste! {
             #[tokio::test]
-            async fn [<test_hello_world_ $lang:lower>]() {
+            async fn [<test_ $lang:lower>]() {
                 let output = $crate::runner::test_run(&$lang, $code).await.unwrap();
                 assert_eq!(
                     output,
