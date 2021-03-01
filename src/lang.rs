@@ -568,6 +568,36 @@ main = putStrLn "Hello, World!"
 "#
 );
 
+make_lang!(Erlang);
+impl Language for Erlang {
+    CODES!["erlang", "erl"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "23" });
+        match version.as_str() {
+            "24" | "23" | "22" | "21" | "20" | "19" | "18" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        }
+        Ok(RunSpec {
+            image_name: format!("erlang{}", version),
+            code_path: "main.erl",
+            dockerfile: format!(
+                r#"
+FROM erlang:{version}-alpine
+CMD ["escript", "main.erl"]
+"#,
+                version = version
+            ),
+        })
+    }
+}
+test_lang!(
+    Erlang,
+    r#"
+main(_) ->
+  io:format("Hello, World!~n", []).
+"#
+);
+
 make_lang!(Elixir);
 impl Language for Elixir {
     CODES!["elixir"];
