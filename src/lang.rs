@@ -142,6 +142,24 @@ CMD ["zsh", "run.sh"]
 }
 test_lang!(Zsh, "echo 'Hello, World!'");
 
+make_lang!(PowerShell);
+impl Language for PowerShell {
+    CODES!["powershell", "ps", "ps1"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "powershell".to_owned(),
+            code_path: "run.ps1",
+            dockerfile: r#"
+FROM mcr.microsoft.com/powershell:debian-buster-slim
+CMD ["pwsh", "run.ps1"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(PowerShell, "Write-Output 'Hello, World!'");
+
 make_lang!(Python);
 impl Language for Python {
     CODES!["python", "py", "gyp"];
