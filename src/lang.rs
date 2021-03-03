@@ -604,6 +604,23 @@ CMD ["sbcl", "--script", "run.lsp"]
 }
 test_lang!(CommonLisp, "(format t \"Hello, World!~%\")");
 
+make_lang!(Racket);
+impl Language for Racket {
+    CODES!["racket"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+      bind_opts!(opts => {});
+      Ok(RunSpec {
+          image_name: "racket".to_owned(),
+          code_path: "run.rkt",
+          dockerfile: r#"
+FROM racket/racket:8.0
+CMD ["racket", "--load", "run.rkt"]
+"#.to_owned(),
+      })
+    }
+}
+test_lang!(Racket, r#"(display "Hello, World!\n")"#);
+
 make_lang!(Haskell);
 impl Language for Haskell {
     CODES!["haskell", "hs"];
