@@ -63,12 +63,12 @@ macro_rules! count {
 
 macro_rules! CODES {
     ($($codes:literal),*) => (
-    fn codes(&self) -> &[Ascii<&str>] {
+        fn codes(&self) -> &[Ascii<&str>] {
             // We declare a const and then take a ref to it because we want a 'static slice. If we
             // just directly took a ref then it would have a temporary lifetime
             const CODES: [Ascii<&str>; count!($($codes),*)] = [$(Ascii::new($codes)),*];
             &CODES
-    }
+        }
     )
 }
 
@@ -582,9 +582,27 @@ test_lang!(
     Dart,
     r#"
 void main() {
-  print('Hello, World!');
+    print('Hello, World!');
 }"#
 );
+
+make_lang!(CommonLisp, "Common Lisp");
+impl Language for CommonLisp {
+    CODES!["lisp"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "common-lisp".to_owned(),
+            code_path: "run.lsp",
+            dockerfile: r#"
+FROM clfoundation/sbcl:2.1.2-alpine3.13
+CMD ["sbcl", "--script", "run.lsp"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(CommonLisp, "(format t \"Hello, World!~%\")");
 
 make_lang!(Haskell);
 impl Language for Haskell {
