@@ -562,6 +562,30 @@ CMD ["swift", "main.swift" ]
 }
 test_lang!(Swift, "print(\"Hello, World!\")");
 
+make_lang!(Dart);
+impl Language for Dart {
+    CODES!["dart"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "dart".to_owned(),
+            code_path: "main.dart",
+            dockerfile: r#"
+FROM google/dart
+CMD ["dart", "main.dart"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(
+    Dart,
+    r#"
+void main() {
+  print('Hello, World!');
+}"#
+);
+
 make_lang!(Haskell);
 impl Language for Haskell {
     CODES!["haskell", "hs"];
