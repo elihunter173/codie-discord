@@ -138,13 +138,6 @@ print('Hello World')
 
 #[serenity::async_trait]
 impl EventHandler for Handler {
-    // RULES FOR EDITING:
-    // * The rules for mentioning is the same
-    // * If a message is edited, she updates her reply to that message if it exists. Otherwise she
-    // complains. Should be able to do channel.messages(|builder| builder.after(msg.id).limit(10)).
-    // Might have to embed a message ID we're replying to in the thing. Or actually pick the first
-    // message within 10 after that mentions the user
-    // I'm kinda leaning towards message ID
     async fn message_update(
         &self,
         ctx: Context,
@@ -172,6 +165,7 @@ impl EventHandler for Handler {
         let reply_id = match self.message_ids.get(msg.id).unwrap() {
             Some(reply_id) => reply_id,
             None => {
+                // TODO: Should I send a new message? Maybe only if this message is recent enough?
                 msg.react(&ctx, '❌')
                     .await
                     .expect("failed to react to message");
@@ -181,6 +175,12 @@ impl EventHandler for Handler {
 
         let runner = &self.bot;
         let (tx, mut rx) = mpsc::channel(2);
+        msg.channel_id
+            .edit_message(&ctx, reply_id, |builder| {
+                builder.content("Re-running message")
+            })
+            .await
+            .expect("failed to edit message");
         tokio::join!(
             async {
                 try_run_raw(runner, &msg.content, tx).await;
