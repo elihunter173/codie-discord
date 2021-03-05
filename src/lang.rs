@@ -608,18 +608,37 @@ make_lang!(Racket);
 impl Language for Racket {
     CODES!["racket"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
-      bind_opts!(opts => {});
-      Ok(RunSpec {
-          image_name: "racket".to_owned(),
-          code_path: "run.rkt",
-          dockerfile: r#"
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "racket".to_owned(),
+            code_path: "run.rkt",
+            dockerfile: r#"
 FROM racket/racket:8.0
 CMD ["racket", "--load", "run.rkt"]
-"#.to_owned(),
-      })
+"#
+            .to_owned(),
+        })
     }
 }
 test_lang!(Racket, r#"(display "Hello, World!\n")"#);
+
+make_lang!(Clojure);
+impl Language for Clojure {
+    CODES!["clojure", "clj"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "clojure".to_owned(),
+            code_path: "run.clj",
+            dockerfile: r#"
+FROM clojure:openjdk-17-alpine
+CMD ["lein", "run", "run.clj"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(Clojure, "(println \"Hello, World\")");
 
 make_lang!(Haskell);
 impl Language for Haskell {
