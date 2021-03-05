@@ -632,7 +632,8 @@ impl Language for Clojure {
             code_path: "run.clj",
             dockerfile: r#"
 FROM clojure:openjdk-17-alpine
-CMD ["lein", "run", "run.clj"]
+ENV HOME=/tmp
+CMD ["lein", "exec", "run.clj"]
 "#
             .to_owned(),
         })
