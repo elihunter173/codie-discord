@@ -280,12 +280,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_message_empty() {
+    fn test_parse_empty() {
         assert_eq!(parse_message(""), None);
     }
 
     #[test]
-    fn test_parse_message_random() {
+    fn test_parse_random() {
         assert_eq!(
             parse_message("Hey! I just wanted to check up on your progress on the project. Do you think you could have your part done by tomorrow?"),
             None,
@@ -293,7 +293,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_message_mention_no_opts() {
+    fn test_parse_mention_no_opts() {
         assert_eq!(
             parse_message("@Codie ```py\nprint('Hello, World!')\n```"),
             Some(RunMessage {
@@ -305,7 +305,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_message_mention_opts() {
+    fn test_parse_mention_opts() {
         assert_eq!(
             parse_message("@Codie `[[version=3.8]]` ```py\nprint('Hello, World!')\n```"),
             Some(RunMessage {
@@ -317,7 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_message_run_cmd_no_opts() {
+    fn test_parse_run_cmd_no_opts() {
         assert_eq!(
             parse_message("#!run ```py\nprint('Hello, World!')\n```"),
             Some(RunMessage {
@@ -329,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_message_run_cmd_opts() {
+    fn test_parse_run_cmd_opts() {
         assert_eq!(
             parse_message("#!run version=3.8 ```py\nprint('Hello, World!')\n```"),
             Some(RunMessage {
@@ -341,10 +341,22 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_message_run_cmd_nospace() {
+    fn test_parse_run_cmd_nospace() {
         assert_eq!(
             parse_message("#!run version=3.8```py\nprint('Hello, World!')\n```"),
             None,
+        );
+    }
+
+    #[test]
+    fn test_parse_unicode() {
+        assert_eq!(
+            parse_message("#!run ```sh\necho I 𝓵𝓸𝓿𝓮 unicode\n```"),
+            Some(RunMessage {
+                lang: "sh",
+                opts: "",
+                code: "echo I 𝓵𝓸𝓿𝓮 unicode\n",
+            }),
         );
     }
 }
