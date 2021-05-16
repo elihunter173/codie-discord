@@ -155,6 +155,8 @@ impl EventHandler for Handler {
             .await
             .expect("failed to get handle on message");
 
+        log::trace!("Received edited message: {:#?}", msg);
+
         if msg.is_own(&ctx).await {
             return;
         }
@@ -206,6 +208,8 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
+        log::trace!("Received new message: {:#?}", msg);
+
         if msg.is_own(&ctx).await {
             return;
         }
