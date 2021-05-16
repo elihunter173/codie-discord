@@ -112,7 +112,7 @@ impl CodeRunner {
                 Ok(()) => {}
                 // Means container is already stopped
                 Err(shiplift::Error::Fault { code, .. }) if code == 304 => {}
-                Err(err) => panic!(err),
+                Err(err) => panic!("{}", err),
             }
         }
         let mut output_builder = OutputBuilder::new(
@@ -192,7 +192,7 @@ impl fmt::Display for Output {
         }
 
         if !self.success() {
-            write!(f, "**EXIT STATUS:** {}\n", self.status)?;
+            writeln!(f, "**EXIT STATUS:** {}", self.status)?;
         }
 
         write!(f, "```\n{}```", escape_codeblock(&self.tty))?;

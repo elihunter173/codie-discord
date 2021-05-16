@@ -35,7 +35,7 @@ fn quoted_string(i: &str) -> IResult<&str, String> {
 fn string(i: &str) -> IResult<&str, String> {
     context(
         "string",
-        alt((map(quoteless_string, |s| String::from(s)), quoted_string)),
+        alt((map(quoteless_string, String::from), quoted_string)),
     )(i)
 }
 

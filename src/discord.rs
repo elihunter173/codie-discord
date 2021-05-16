@@ -251,7 +251,7 @@ print("Hello, World!")
                         .reply(&ctx, body)
                         .await
                         .expect("failed to reply to message");
-                    if let Some(_) = self.message_ids.insert(msg.id, reply.id).unwrap() {
+                    if self.message_ids.insert(msg.id, reply.id).unwrap().is_some() {
                         panic!("colliding message ids");
                     }
                     while let Some(ref body) = rx.recv().await {
