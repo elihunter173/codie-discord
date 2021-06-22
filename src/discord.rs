@@ -25,8 +25,8 @@ pub struct Handler {
     pub message_ids: MessageIds,
 }
 
-async fn should_run(ctx: &Context, msg: &Message) -> bool {
-    msg.content.starts_with("#!run") || msg.mentions_me(ctx).await.unwrap()
+async fn should_run(_ctx: &Context, msg: &Message) -> bool {
+    msg.content.contains("#!run")
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -38,34 +38,15 @@ struct RunMessage<'a> {
 
 fn parse_message(msg: &str) -> Option<RunMessage> {
     // (?s) enables the 's' flag which lets . match '\n'
-    static MENTION_CODE_LANG: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"(?s)```(?P<lang>\S*)\n(?P<code>.*)```").unwrap());
-    static MENTION_OPTS: Lazy<Regex> = Lazy::new(|| Regex::new(r"`\[\[(?P<opts>.*)\]\]`").unwrap());
-
     static CMD_RUN_ALL: Lazy<Regex> = Lazy::new(|| {
-        Regex::new(r"(?s)^#!run\s+((?P<opts>.*)\s+)?```(?P<lang>\S*)\n(?P<code>.*)```").unwrap()
+        Regex::new(r"(?s)#!run\s+((?P<opts>.*)\s+)?```(?P<lang>\S*)\n(?P<code>.*)```").unwrap()
     });
 
-    if msg.starts_with("#!run") {
-        CMD_RUN_ALL.captures(msg).map(|caps| RunMessage {
-            opts: caps.name("opts").map(|s| s.as_str()).unwrap_or(""),
-            lang: caps.name("lang").unwrap().as_str(),
-            code: caps.name("code").unwrap().as_str(),
-        })
-    } else {
-        let (lang, code) = match MENTION_CODE_LANG.captures(msg) {
-            Some(caps) => (
-                caps.name("lang").unwrap().as_str(),
-                caps.name("code").unwrap().as_str(),
-            ),
-            None => return None,
-        };
-        let opts = match MENTION_OPTS.captures(msg) {
-            Some(caps) => caps.name("opts").unwrap().as_str(),
-            None => "",
-        };
-        Some(RunMessage { opts, lang, code })
-    }
+    CMD_RUN_ALL.captures(msg).map(|caps| RunMessage {
+        opts: caps.name("opts").map(|s| s.as_str()).unwrap_or(""),
+        lang: caps.name("lang").unwrap().as_str(),
+        code: caps.name("code").unwrap().as_str(),
+    })
 }
 
 // XXX: Ideally this would use generators rather than a channel...
@@ -216,10 +197,10 @@ impl EventHandler for Handler {
 
         if msg.content == "#!help" {
             // We extract this because otherwise rustfmt falis
-            const HELP: &str = r#"I know how to run a variety of languages. All you have to do to ask me to run a block of code is to @ me in the message containing the code you want me to run.
+            const HELP: &str = r#"I know how to run a variety of languages. All you have to do to ask me to run a block of code is to include the #!run command at the end of the message followed by the code block you want to run.
 
 Make sure to include a language right after backticks (\`\`\`) or else I won't know how to run your code!"#;
-            const EXAMPLE: &str = r#"@Codie Please run this code \`\`\`python
+            const EXAMPLE: &str = r#"You can write something here to explain your code if you want #!run \`\`\`python
 print("Hello, World!")
 \`\`\`"#;
             msg.channel_id
@@ -267,6 +248,11 @@ print("Hello, World!")
                     }
                 }
             );
+        } else if msg.mentions_me(&ctx).await.unwrap() {
+            msg.reply(&ctx, r#"Mention style run-requests are no longer supported. Use #!run instead. For example
+> Some explanation of the code if you want #!run \`\`\`python
+> print("Hello, World!")
+> \`\`\`"#).await.expect("failed to reply");
         } else if msg.content.starts_with("#!") {
             msg.reply(&ctx, "I'm sorry. I didn't recognize that command")
                 .await
@@ -297,31 +283,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_mention_no_opts() {
-        assert_eq!(
-            parse_message("@Codie ```py\nprint('Hello, World!')\n```"),
-            Some(RunMessage {
-                lang: "py",
-                opts: "",
-                code: "print('Hello, World!')\n",
-            }),
-        );
-    }
-
-    #[test]
-    fn test_parse_mention_opts() {
-        assert_eq!(
-            parse_message("@Codie `[[version=3.8]]` ```py\nprint('Hello, World!')\n```"),
-            Some(RunMessage {
-                lang: "py",
-                opts: "version=3.8",
-                code: "print('Hello, World!')\n",
-            }),
-        );
-    }
-
-    #[test]
-    fn test_parse_run_cmd_no_opts() {
+    fn test_parse_no_opts() {
         assert_eq!(
             parse_message("#!run ```py\nprint('Hello, World!')\n```"),
             Some(RunMessage {
@@ -333,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_run_cmd_opts() {
+    fn test_parse_opts() {
         assert_eq!(
             parse_message("#!run version=3.8 ```py\nprint('Hello, World!')\n```"),
             Some(RunMessage {
@@ -345,10 +307,34 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_run_cmd_nospace() {
+    fn test_parse_nospace() {
         assert_eq!(
             parse_message("#!run version=3.8```py\nprint('Hello, World!')\n```"),
             None,
+        );
+    }
+
+    #[test]
+    fn test_parse_text() {
+        assert_eq!(
+            parse_message("Some exposition\n#!run ```py\nprint('Hello, World!')\n```"),
+            Some(RunMessage {
+                lang: "py",
+                opts: "",
+                code: "print('Hello, World!')\n",
+            }),
+        );
+    }
+
+    #[test]
+    fn test_parse_text_no_newline() {
+        assert_eq!(
+            parse_message("Some exposition #!run ```py\nprint('Hello, World!')\n```"),
+            Some(RunMessage {
+                lang: "py",
+                opts: "",
+                code: "print('Hello, World!')\n",
+            }),
         );
     }
 
