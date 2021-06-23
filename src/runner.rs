@@ -261,7 +261,7 @@ where
 }
 
 #[cfg(test)]
-pub(crate) async fn test_run<'s>(lang: LangRef, code: &'s str) -> anyhow::Result<Output> {
+pub(crate) async fn test_run(lang: LangRef, code: &str) -> anyhow::Result<Output> {
     static TEST_RUNNER: once_cell::sync::Lazy<DockerRunner> =
         once_cell::sync::Lazy::new(|| DockerRunner {
             docker: Docker::new(),

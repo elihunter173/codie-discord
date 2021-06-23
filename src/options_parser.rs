@@ -104,9 +104,8 @@ mod tests {
 
     #[test]
     fn test_dup_keys() {
-        match parse_options("K0=V0 K0=V1") {
-            Ok(v) => panic!(v),
-            Err(_) => (),
+        if let Ok(v) = parse_options("K0=V0 K0=V1") {
+            panic!("{:?}", v);
         }
     }
 
