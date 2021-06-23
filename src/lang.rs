@@ -151,7 +151,7 @@ impl Language for Python {
         codes!["python", "py", "gyp"]
     }
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
-        bind_opts!(opts => { version or "3.9", bundle or "none" });
+        bind_opts!(opts => { version or "3.9", bundle or "scipy" });
         match version.as_str() {
             "3.9" | "3.8" | "3.7" | "3.6" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
