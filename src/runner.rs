@@ -15,7 +15,7 @@ pub struct UnrecognizedContainer;
 
 impl fmt::Display for UnrecognizedContainer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "unrecognized container")
     }
 }
 
@@ -27,7 +27,7 @@ pub struct RunSpec {
     pub dockerfile: String,
 }
 
-pub struct CodeRunner {
+pub struct DockerRunner {
     pub docker: Docker,
     pub langs: HashMap<Ascii<&'static str>, LangRef>,
     pub timeout: Duration,
@@ -35,7 +35,7 @@ pub struct CodeRunner {
     pub memory: u64,
 }
 
-impl CodeRunner {
+impl DockerRunner {
     pub fn get_lang_by_code(&self, code: &str) -> Option<LangRef> {
         self.langs.get(&Ascii::new(code)).copied()
     }
@@ -262,8 +262,8 @@ where
 
 #[cfg(test)]
 pub(crate) async fn test_run<'s>(lang: LangRef, code: &'s str) -> anyhow::Result<Output> {
-    static TEST_RUNNER: once_cell::sync::Lazy<CodeRunner> =
-        once_cell::sync::Lazy::new(|| CodeRunner {
+    static TEST_RUNNER: once_cell::sync::Lazy<DockerRunner> =
+        once_cell::sync::Lazy::new(|| DockerRunner {
             docker: Docker::new(),
             timeout: Duration::from_secs(10),
             // As much as needed

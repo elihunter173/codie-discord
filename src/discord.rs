@@ -14,14 +14,14 @@ use tokio::sync::mpsc::{self, Sender};
 use crate::{
     db::MessageIds,
     options_parser::parse_options,
-    runner::{CodeRunner, UnrecognizedContainer},
+    runner::{DockerRunner, UnrecognizedContainer},
 };
 
 // TODO: Do I want to react to message when I send them?
 
 pub struct Handler {
     pub language_text: Box<str>,
-    pub bot: CodeRunner,
+    pub bot: DockerRunner,
     pub message_ids: MessageIds,
 }
 
@@ -50,7 +50,7 @@ fn parse_message(msg: &str) -> Option<RunMessage> {
 }
 
 // XXX: Ideally this would use generators rather than a channel...
-async fn try_run_raw(runner: &CodeRunner, msg: &str, tx: Sender<String>) {
+async fn try_run_raw(runner: &DockerRunner, msg: &str, tx: Sender<String>) {
     macro_rules! send {
         ($($arg:tt)*) => ( tx.send(format!($($arg)*)).await.unwrap() )
     }

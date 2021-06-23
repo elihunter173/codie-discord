@@ -10,7 +10,7 @@ use std::{collections::HashMap, env, time::Duration};
 use serenity::client::Client;
 use shiplift::Docker;
 
-use crate::{db::MessageIds, discord::Handler, lang::LangRef, runner::CodeRunner};
+use crate::{db::MessageIds, discord::Handler, lang::LangRef, runner::DockerRunner};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
     let mut client = Client::builder(&env::var("DISCORD_TOKEN").expect("`DISCORD_TOKEN` not set"))
         .event_handler(Handler {
             language_text: language_text.join("\n").into_boxed_str(),
-            bot: CodeRunner {
+            bot: DockerRunner {
                 docker: Docker::new(),
                 langs,
                 timeout: Duration::from_secs(30),
