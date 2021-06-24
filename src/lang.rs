@@ -23,14 +23,17 @@ pub type LangRef = &'static (dyn Language + Send + Sync);
 inventory::collect!(LangRef);
 
 macro_rules! make_lang {
-    ($lang:ident) => {
+    ($lang:ident, $($name:tt)+) => {
         pub struct $lang;
         inventory::submit!(&$lang as LangRef);
         impl fmt::Display for $lang {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, stringify!($lang))
+                write!(f, $($name)*)
             }
         }
+    };
+    ($lang:ident) => {
+        make_lang!($lang, stringify!($lang));
     };
 }
 
@@ -39,7 +42,7 @@ macro_rules! test_lang {
         #[cfg(test)]
         paste::paste! {
             #[tokio::test]
-            async fn [<test_hello_world_ $lang:lower>]() {
+            async fn [<test_ $lang:lower>]() {
                 let output = $crate::runner::test_run(&$lang, $code).await.unwrap();
                 assert_eq!(
                     output,
@@ -58,9 +61,9 @@ macro_rules! count {
     ($($xs:tt),*) => (0 $(+ count!($xs))*);
 }
 
-macro_rules! codes {
+macro_rules! CODES {
     ($($codes:literal),*) => (
-        {
+        fn codes(&self) -> &[Ascii<&str>] {
             // We declare a const and then take a ref to it because we want a 'static slice. If we
             // just directly took a ref then it would have a temporary lifetime
             const CODES: [Ascii<&str>; count!($($codes),*)] = [$(Ascii::new($codes)),*];
@@ -85,18 +88,16 @@ macro_rules! bind_opts {
 
 make_lang!(Sh);
 impl Language for Sh {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["sh"]
-    }
+    CODES!["sh"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "sh".to_owned(),
-            code_path: "/tmp/run.sh",
-            dockerfile: "
+            code_path: "run.sh",
+            dockerfile: r#"
 FROM alpine:3.13
-CMD sh /tmp/run.sh
-"
+CMD ["sh", "run.sh"]
+"#
             .to_owned(),
         })
     }
@@ -105,19 +106,17 @@ test_lang!(Sh, "echo 'Hello, World!'");
 
 make_lang!(Bash);
 impl Language for Bash {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["bash"]
-    }
+    CODES!["bash"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "bash".to_owned(),
-            code_path: "/tmp/run.sh",
-            dockerfile: "
+            code_path: "run.sh",
+            dockerfile: r#"
 FROM alpine:3.13
 RUN apk add --no-cache bash
-CMD bash /tmp/run.sh
-"
+CMD ["bash", "run.sh"]
+"#
             .to_owned(),
         })
     }
@@ -126,30 +125,44 @@ test_lang!(Bash, "echo 'Hello, World!'");
 
 make_lang!(Zsh);
 impl Language for Zsh {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["zsh"]
-    }
+    CODES!["zsh"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "zsh".to_owned(),
-            code_path: "/tmp/run.sh",
-            dockerfile: "
+            code_path: "run.sh",
+            dockerfile: r#"
 FROM alpine:3.13
 RUN apk add --no-cache zsh
-CMD zsh /tmp/run.sh
-"
+CMD ["zsh", "run.sh"]
+"#
             .to_owned(),
         })
     }
 }
 test_lang!(Zsh, "echo 'Hello, World!'");
 
+make_lang!(PowerShell);
+impl Language for PowerShell {
+    CODES!["powershell", "ps", "ps1"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "powershell".to_owned(),
+            code_path: "run.ps1",
+            dockerfile: r#"
+FROM mcr.microsoft.com/powershell:debian-buster-slim
+CMD ["pwsh", "run.ps1"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(PowerShell, "Write-Output 'Hello, World!'");
+
 make_lang!(Python);
 impl Language for Python {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["python", "py", "gyp"]
-    }
+    CODES!["python", "py", "gyp"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => { version or "3.9", bundle or "scipy" });
         match version.as_str() {
@@ -161,17 +174,16 @@ impl Language for Python {
             "scipy" => "RUN pip install numpy scipy sympy",
             _ => return Err(OptionsError::UnknownValue(bundle)),
         };
-
         Ok(RunSpec {
             image_name: format!("python{}-{}", version, bundle),
-            code_path: "/tmp/run.py",
+            code_path: "run.py",
             dockerfile: format!(
-                "
+                r#"
 FROM python:{version}-slim-buster
 ENV PYTHONUNBUFFERED=1
 {pip_install}
-CMD python /tmp/run.py
-",
+CMD ["python", "run.py"]
+"#,
                 version = version,
                 pip_install = pip_install,
             ),
@@ -182,24 +194,21 @@ test_lang!(Python, "print('Hello, World!')");
 
 make_lang!(JavaScript);
 impl Language for JavaScript {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["javascript", "js", "jsx"]
-    }
+    CODES!["javascript", "js", "jsx"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => { version or "15" });
         match version.as_str() {
             "15" | "14" | "12" | "10" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
-
         Ok(RunSpec {
             image_name: format!("nodejs{}", version),
-            code_path: "/tmp/index.js",
+            code_path: "index.js",
             dockerfile: format!(
-                "
+                r#"
 FROM node:{version}-alpine
-CMD node /tmp/index.js
-",
+CMD ["node", "index.js"]
+"#,
                 version = version,
             ),
         })
@@ -207,31 +216,83 @@ CMD node /tmp/index.js
 }
 test_lang!(JavaScript, "console.log('Hello, World!');");
 
+make_lang!(TypeScript);
+impl Language for TypeScript {
+    CODES!["typescript", "ts"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "typescript".to_owned(),
+            code_path: "index.ts",
+            // This is taken from https://github.com/hayd/deno-docker/blob/master/distroless.dockerfile
+            dockerfile: r#"
+FROM alpine:3.12.3
+
+ENV DENO_VERSION=1.7.2
+
+RUN apk add --virtual .download --no-cache curl \
+ && curl -fsSL https://github.com/denoland/deno/releases/download/v${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip \
+         --output deno.zip \
+ && unzip deno.zip \
+ && rm deno.zip \
+ && chmod 755 deno \
+ && mv deno /bin/deno \
+ && apk del .download
+
+
+FROM gcr.io/distroless/cc
+COPY --from=0 /bin/deno /bin/deno
+
+ENV DENO_VERSION=1.7.2
+ENV DENO_DIR deno
+ENV DENO_INSTALL_ROOT /usr/local
+CMD ["/bin/deno", "run", "--quiet", "index.ts"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(TypeScript, "console.log('Hello, World!');");
+
 make_lang!(Perl);
 impl Language for Perl {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["perl", "pl", "pm"]
-    }
+    CODES!["perl", "pl", "pm"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         Ok(RunSpec {
             image_name: "perl".to_owned(),
-            code_path: "/tmp/run.pl",
-            dockerfile: "
+            code_path: "run.pl",
+            dockerfile: r#"
 FROM perl:slim-buster
-CMD perl /tmp/run.pl
-"
+CMD ["perl", "run.pl"]
+"#
             .to_owned(),
         })
     }
 }
 test_lang!(Perl, "print 'Hello, World!\n'");
 
+make_lang!(PHP);
+impl Language for PHP {
+    CODES!["php", "php3", "php4", "php5", "php6", "php7", "php8"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "php".to_owned(),
+            code_path: "run.php",
+            dockerfile: r#"
+FROM php:8.0-alpine
+CMD ["php", "run.php"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(PHP, "<?php echo 'Hello, World!\n' ?>");
+
 make_lang!(Ruby);
 impl Language for Ruby {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["ruby", "rb", "gemspec", "podspec", "thor", "irb"]
-    }
+    CODES!["ruby", "rb", "gemspec", "podspec", "thor", "irb"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         // TODO: Support JRuby
         bind_opts!(opts => { version or "3.0" });
@@ -239,15 +300,14 @@ impl Language for Ruby {
             "3.0" | "2.7" | "2.6" | "2.5" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
-
         Ok(RunSpec {
             image_name: format!("ruby{}", version),
-            code_path: "/tmp/run.rb",
+            code_path: "run.rb",
             dockerfile: format!(
-                "
+                r#"
 FROM ruby:{version}-alpine
-CMD ruby /tmp/run.rb
-",
+CMD ["ruby", "run.rb"]
+"#,
                 version = version
             ),
         })
@@ -255,28 +315,93 @@ CMD ruby /tmp/run.rb
 }
 test_lang!(Ruby, "puts 'Hello, World!'");
 
+make_lang!(Lua);
+impl Language for Lua {
+    CODES!["lua"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "5.4" });
+        // TODO: Add LuaJIT
+        match version.as_str() {
+            "5.4" | "5.3" | "5.2" | "5.1" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        };
+        Ok(RunSpec {
+            image_name: format!("lua{}", version),
+            code_path: "run.lua",
+            dockerfile: format!(
+                r#"
+FROM alpine:edge
+RUN apk add --no-cache lua{version}
+CMD ["lua{version}", "run.lua"]
+"#,
+                version = version
+            ),
+        })
+    }
+}
+test_lang!(Lua, "print('Hello, World!')");
+
+make_lang!(Julia);
+impl Language for Julia {
+    CODES!["julia", "julia-repl"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "1.6" });
+        match version.as_str() {
+            "1.6" | "1.5" | "1.0" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        };
+        Ok(RunSpec {
+            image_name: format!("julia{}", version),
+            code_path: "run.jl",
+            dockerfile: format!(
+                r#"
+FROM julia:{version}
+CMD ["julia", "run.jl"]
+"#,
+                version = version
+            ),
+        })
+    }
+}
+test_lang!(Julia, "println(\"Hello, World!\")");
+
+make_lang!(R);
+impl Language for R {
+    CODES!["r"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "r".to_owned(),
+            code_path: "run.R",
+            dockerfile: r#"
+FROM r-base
+CMD ["Rscript", "run.R"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(R, "cat('Hello, World!\n')");
+
 make_lang!(Go);
 impl Language for Go {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["go", "golang"]
-    }
+    CODES!["go", "golang"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => { version or "1.16" });
         match version.as_str() {
             "1.16" | "1.15" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
-
         Ok(RunSpec {
             image_name: format!("golang{}", version),
-            code_path: "/tmp/main.go",
+            code_path: "main.go",
             dockerfile: format!(
-                "
+                r#"
 FROM golang:{version}-alpine
 # So that we can build code
 ENV GOCACHE=/tmp/.cache/go
-CMD go run /tmp/main.go
-",
+CMD ["go", "run", "main.go"]
+"#,
                 version = version
             ),
         })
@@ -294,19 +419,16 @@ func main() {
 
 make_lang!(Java);
 impl Language for Java {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["java", "jsp"]
-    }
+    CODES!["java", "jsp"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => { version or "15" });
         match version.as_str() {
             "17" | "16" | "15" | "11" | "8" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
-
         Ok(RunSpec {
-            image_name: format!("openjdk{}", version),
-            code_path: "/tmp/code",
+            image_name: format!("java-openjdk{}", version),
+            code_path: "code",
             dockerfile: format!(
                 r#"
 FROM openjdk:{version}-jdk-slim-buster
@@ -330,22 +452,286 @@ public class Hello {
 }"#
 );
 
+make_lang!(Kotlin);
+impl Language for Kotlin {
+    CODES!["kotlin", "kt"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "kotlin".to_owned(),
+            code_path: "main.kt",
+            dockerfile: r#"
+FROM openjdk:11-jre-slim
+RUN apt-get update && apt-get install -y --no-install-recommends wget unzip && \
+    rm -rf /var/lib/apt/lists/* && \
+    cd /usr/lib && \
+    wget -q https://github.com/JetBrains/kotlin/releases/download/v1.4.10/kotlin-compiler-1.4.10.zip && \
+    unzip kotlin-compiler-*.zip && \
+    apt-get remove -y wget unzip && \
+    apt-get autoremove -y && \
+    apt-get autoclean -y && \
+    rm kotlin-compiler-*.zip && \
+    rm -f kotlinc/bin/*.bat
+ENV PATH $PATH:/usr/lib/kotlinc/bin
+CMD ["sh", "-c", "kotlinc main.kt -include-runtime -d main.jar && java -jar main.jar"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(
+    Kotlin,
+    r#"
+fun main() {
+    println("Hello, World!")
+}
+"#
+);
+
+make_lang!(Groovy);
+impl Language for Groovy {
+    CODES!["groovy"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "3.0" });
+        match version.as_str() {
+            "4.0" | "3.0" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        }
+        Ok(RunSpec {
+            image_name: format!("groovy{}", version),
+            code_path: "run.groovy",
+            dockerfile: format!(
+                r#"
+FROM groovy:{version}-jre11
+CMD ["groovy", "run.groovy"]
+"#,
+                version = version,
+            ),
+        })
+    }
+}
+test_lang!(Groovy, "println 'Hello, World!'");
+
+make_lang!(CSharp, "C#");
+impl Language for CSharp {
+    CODES!["csharp", "cs"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "csharp".to_owned(),
+            code_path: "main.cs",
+            dockerfile: r#"
+FROM mono:6.12
+CMD ["sh", "-c", "mcs -out:main.exe main.cs && mono main.exe" ]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(
+    CSharp,
+    r#"
+class HelloWorld {
+    static void Main() {
+        System.Console.WriteLine("Hello, World!");
+    }
+}"#
+);
+
+make_lang!(Swift);
+impl Language for Swift {
+    CODES!["swift"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "5.3" });
+        match version.as_str() {
+            "5.3" | "5.2" | "5.1" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        };
+        Ok(RunSpec {
+            image_name: format!("swift{}", version),
+            code_path: "main.swift",
+            dockerfile: format!(
+                r#"
+FROM swift:{version}
+CMD ["swift", "main.swift" ]
+"#,
+                version = version,
+            ),
+        })
+    }
+}
+test_lang!(Swift, "print(\"Hello, World!\")");
+
+make_lang!(Dart);
+impl Language for Dart {
+    CODES!["dart"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "dart".to_owned(),
+            code_path: "main.dart",
+            dockerfile: r#"
+FROM google/dart
+CMD ["dart", "main.dart"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(
+    Dart,
+    r#"
+void main() {
+    print('Hello, World!');
+}"#
+);
+
+make_lang!(CommonLisp, "Common Lisp");
+impl Language for CommonLisp {
+    CODES!["lisp"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "common-lisp".to_owned(),
+            code_path: "run.lsp",
+            dockerfile: r#"
+FROM clfoundation/sbcl:2.1.2-alpine3.13
+CMD ["sbcl", "--script", "run.lsp"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(CommonLisp, "(format t \"Hello, World!~%\")");
+
+make_lang!(Racket);
+impl Language for Racket {
+    CODES!["racket"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "racket".to_owned(),
+            code_path: "run.rkt",
+            dockerfile: r#"
+FROM racket/racket:8.0
+CMD ["racket", "--load", "run.rkt"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(Racket, r#"(display "Hello, World!\n")"#);
+
+make_lang!(Haskell);
+impl Language for Haskell {
+    CODES!["haskell", "hs"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "haskell".to_owned(),
+            code_path: "main.hs",
+            dockerfile: r#"
+FROM haskell
+CMD ["runhaskell", "main.hs"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(
+    Haskell,
+    r#"
+main :: IO ()
+main = putStrLn "Hello, World!"
+"#
+);
+
+make_lang!(Erlang);
+impl Language for Erlang {
+    CODES!["erlang", "erl"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "23" });
+        match version.as_str() {
+            "24" | "23" | "22" | "21" | "20" | "19" | "18" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        }
+        Ok(RunSpec {
+            image_name: format!("erlang{}", version),
+            code_path: "main.erl",
+            dockerfile: format!(
+                r#"
+FROM erlang:{version}-alpine
+CMD ["escript", "main.erl"]
+"#,
+                version = version
+            ),
+        })
+    }
+}
+test_lang!(
+    Erlang,
+    r#"
+main(_) ->
+  io:format("Hello, World!~n", []).
+"#
+);
+
+make_lang!(Elixir);
+impl Language for Elixir {
+    CODES!["elixir"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => { version or "1.11" });
+        match version.as_str() {
+            "1.11" | "1.10" | "1.9" | "1.8" | "1.7" | "1.6" => (),
+            _ => return Err(OptionsError::UnknownValue(version)),
+        }
+        Ok(RunSpec {
+            image_name: format!("elixir{}", version),
+            code_path: "run.exs",
+            dockerfile: format!(
+                r#"
+FROM elixir:{version}-alpine
+CMD ["elixir", "run.exs"]
+"#,
+                version = version,
+            ),
+        })
+    }
+}
+test_lang!(Elixir, "IO.puts \"Hello, World!\"");
+
+make_lang!(OCaml);
+impl Language for OCaml {
+    CODES!["ocaml", "ml"];
+    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
+        bind_opts!(opts => {});
+        Ok(RunSpec {
+            image_name: "ocaml".to_owned(),
+            code_path: "main.ml",
+            dockerfile: r#"
+FROM alpine:3.13
+RUN apk add --no-cache ocaml
+CMD ["ocaml", "main.ml"]
+"#
+            .to_owned(),
+        })
+    }
+}
+test_lang!(OCaml, "print_string \"Hello, World!\n\"");
+
 make_lang!(C);
 impl Language for C {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["c", "h"]
-    }
+    CODES!["c", "h"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         // TODO: Support clang, CFLAGS, and different versions of gcc
-
         Ok(RunSpec {
             image_name: "c-gcc".to_owned(),
-            code_path: "/tmp/main.c",
-            dockerfile: "
+            code_path: "main.c",
+            dockerfile: r#"
 FROM gcc:latest
-CMD sh -c 'gcc -Wall -Wextra main.c -o main && ./main'
-"
+CMD ["sh", "-c", "gcc -Wall -Wextra main.c -o main && ./main"]
+"#
             .to_owned(),
         })
     }
@@ -360,22 +746,19 @@ int main() {
 }"#
 );
 
-make_lang!(Cpp);
+make_lang!(Cpp, "C++");
 impl Language for Cpp {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["cpp", "hpp", "cc", "hh", "c++", "h++", "cxx", "hxx"]
-    }
+    CODES!["cpp", "hpp", "cc", "hh", "c++", "h++", "cxx", "hxx"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         // TODO: Support clang, CFLAGS, and different versions of gcc
-
         Ok(RunSpec {
             image_name: "cpp-gcc".to_owned(),
-            code_path: "/tmp/main.cpp",
-            dockerfile: "
+            code_path: "main.cpp",
+            dockerfile: r#"
 FROM gcc:latest
-CMD sh -c 'g++ -Wall -Wextra main.cpp -o main && ./main'
-"
+CMD ["sh", "-c", "g++ -Wall -Wextra main.cpp -o main && ./main"]
+"#
             .to_owned(),
         })
     }
@@ -392,20 +775,17 @@ int main() {
 
 make_lang!(Rust);
 impl Language for Rust {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["rust", "rs"]
-    }
+    CODES!["rust", "rs"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
         // TODO: Support rust versions and nightly features
-
         Ok(RunSpec {
             image_name: "rust".to_owned(),
-            code_path: "/tmp/main.rs",
-            dockerfile: "
+            code_path: "main.rs",
+            dockerfile: r#"
 FROM rust:alpine
-CMD sh -c 'rustc main.rs -o main && ./main'
-"
+CMD ["sh", "-c", "rustc main.rs -o main && ./main"]
+"#
             .to_owned(),
         })
     }
@@ -420,19 +800,16 @@ fn main() {
 
 make_lang!(Fortran);
 impl Language for Fortran {
-    fn codes(&self) -> &[Ascii<&str>] {
-        codes!["fortran", "f90", "f95"]
-    }
+    CODES!["fortran", "f90", "f95"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
-
         Ok(RunSpec {
             image_name: "fortran".to_owned(),
-            code_path: "/tmp/main.f95",
-            dockerfile: "
+            code_path: "main.f95",
+            dockerfile: r#"
 FROM gcc:latest
-CMD sh -c 'gfortran -Wall -Wextra main.f95 -o main && ./main'
-"
+CMD ["sh", "-c", "gfortran -Wall -Wextra main.f95 -o main && ./main"]
+"#
             .to_owned(),
         })
     }
