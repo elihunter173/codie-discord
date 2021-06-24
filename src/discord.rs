@@ -17,6 +17,11 @@ use crate::{
     runner::{DockerRunner, UnrecognizedContainer},
 };
 
+// Codie's Color Scheme: https://coolors.co/dde0e3-ff69b4-52527a
+// Gray: #DDE0E3
+// Pink: #FF69B4
+// Blue: #52527A
+
 // TODO: Do I want to react to message when I send them?
 
 pub struct Handler {
