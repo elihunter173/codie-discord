@@ -622,25 +622,6 @@ CMD ["racket", "--load", "run.rkt"]
 }
 test_lang!(Racket, r#"(display "Hello, World!\n")"#);
 
-make_lang!(Clojure);
-impl Language for Clojure {
-    CODES!["clojure", "clj"];
-    fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
-        bind_opts!(opts => {});
-        Ok(RunSpec {
-            image_name: "clojure".to_owned(),
-            code_path: "run.clj",
-            dockerfile: r#"
-FROM clojure:openjdk-17-alpine
-ENV HOME=/tmp
-CMD ["lein", "exec", "run.clj"]
-"#
-            .to_owned(),
-        })
-    }
-}
-test_lang!(Clojure, "(println \"Hello, World\")");
-
 make_lang!(Haskell);
 impl Language for Haskell {
     CODES!["haskell", "hs"];
