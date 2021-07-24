@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serenity::{
@@ -5,17 +7,41 @@ use serenity::{
         channel::Message,
         event::MessageUpdateEvent,
         gateway::{Activity, Ready},
+        id::MessageId,
     },
     prelude::{Context, EventHandler},
     utils::Color,
 };
+use sled::Tree;
 use tokio::sync::mpsc::{self, Sender};
 
 use crate::{
-    db::MessageIds,
     options_parser::parse_options,
     runner::{DockerRunner, UnrecognizedContainer},
 };
+
+pub struct MessageIds(Tree);
+
+// TODO: There's some duplicated code, maybe use traits to make it generic?
+impl MessageIds {
+    pub fn new(tree: Tree) -> Self {
+        Self(tree)
+    }
+
+    pub fn insert(&self, k: MessageId, v: MessageId) -> sled::Result<Option<MessageId>> {
+        self.0
+            .insert(&k.as_u64().to_le_bytes(), &v.as_u64().to_le_bytes())
+            .map(|opt| {
+                opt.map(|ivec| MessageId(u64::from_le_bytes(ivec.as_ref().try_into().unwrap())))
+            })
+    }
+
+    pub fn get(&self, k: MessageId) -> sled::Result<Option<MessageId>> {
+        self.0.get(&k.as_u64().to_le_bytes()).map(|opt| {
+            opt.map(|ivec| MessageId(u64::from_le_bytes(ivec.as_ref().try_into().unwrap())))
+        })
+    }
+}
 
 // TODO: Do I want to react to message when I send them?
 

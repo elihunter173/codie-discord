@@ -1,7 +1,5 @@
-mod db;
 mod discord;
 mod lang;
-mod logging;
 mod options_parser;
 mod runner;
 
@@ -10,7 +8,11 @@ use std::{collections::HashMap, env, time::Duration};
 use serenity::client::Client;
 use shiplift::Docker;
 
-use crate::{db::MessageIds, discord::Handler, lang::LangRef, runner::DockerRunner};
+use crate::{
+    discord::{Handler, MessageIds},
+    lang::LangRef,
+    runner::DockerRunner,
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
