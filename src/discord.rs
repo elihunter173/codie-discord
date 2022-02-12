@@ -47,7 +47,7 @@ impl MessageIds {
 
 pub struct Handler {
     pub language_text: Box<str>,
-    pub bot: DockerRunner,
+    pub runner: DockerRunner,
     pub message_ids: MessageIds,
 }
 
@@ -182,7 +182,7 @@ impl EventHandler for Handler {
             }
         };
 
-        let runner = &self.bot;
+        let runner = &self.runner;
         let (tx, mut rx) = mpsc::channel(2);
         msg.channel_id
             .edit_message(&ctx, reply_id, |builder| {
@@ -246,7 +246,7 @@ print("Hello, World!")
                 .await
                 .expect("failed to send help message");
         } else if should_run(&ctx, &msg).await {
-            let runner = &self.bot;
+            let runner = &self.runner;
             let (tx, mut rx) = mpsc::channel(2);
             tokio::join!(
                 async {

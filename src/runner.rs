@@ -52,7 +52,7 @@ pub struct DockerRunner {
     pub langs: HashMap<Ascii<&'static str>, LangRef>,
     pub timeout: Duration,
     pub cpus: f64,
-    pub memory: u64,
+    pub memory_bytes: u64,
 }
 
 impl DockerRunner {
@@ -108,7 +108,7 @@ impl DockerRunner {
                 .working_dir("/tmp")
                 // Don't take too many resources
                 .cpus(self.cpus)
-                .memory(self.memory)
+                .memory(self.memory_bytes)
                 // Stop immediately
                 .stop_signal("SIGKILL")
                 .stop_timeout(Duration::from_nanos(0))
@@ -288,7 +288,7 @@ pub(crate) async fn test_run(lang: LangRef, code: &str) -> anyhow::Result<Output
             timeout: Duration::from_secs(10),
             // As much as needed
             cpus: 0.0,
-            memory: 0,
+            memory_bytes: 0,
             langs: HashMap::new(),
         });
 

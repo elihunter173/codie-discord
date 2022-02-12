@@ -2,3 +2,6 @@ target/
 
 # sled db
 data/
+
+# Config file
+codie.toml
