@@ -41,6 +41,7 @@ impl fmt::Display for UnrecognizedContainer {
 
 impl std::error::Error for UnrecognizedContainer {}
 
+#[derive(Debug)]
 pub struct RunSpec {
     pub code_path: &'static str,
     pub image_name: String,
@@ -53,6 +54,16 @@ pub struct DockerRunner {
     pub timeout: Duration,
     pub cpus: f64,
     pub memory_bytes: u64,
+}
+
+impl fmt::Debug for DockerRunner {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DockerRunner")
+            .field("timeout", &self.timeout)
+            .field("cpus", &self.cpus)
+            .field("memory_bytes", &self.memory_bytes)
+            .finish_non_exhaustive()
+    }
 }
 
 impl DockerRunner {
@@ -71,7 +82,7 @@ impl DockerRunner {
         let dir_str = dir.path().to_str().unwrap();
 
         let image_name = format!("codie/{}", spec.image_name);
-        log::info!("Building {}", image_name);
+        tracing::info!("Building {}", image_name);
         let images = self.docker.images();
         let build_opts = shiplift::BuildOptions::builder(dir_str)
             .tag(image_name)
@@ -81,7 +92,7 @@ impl DockerRunner {
             match build_result {
                 Ok(output) => match output.get("error") {
                     Some(_) => anyhow::bail!("build error: {:?}", output),
-                    None => log::debug!("{:?}", output),
+                    None => tracing::debug!("{:?}", output),
                 },
                 Err(e) => anyhow::bail!("failed while building: {:?}", e),
             }
@@ -124,7 +135,7 @@ impl DockerRunner {
             .copy_file_into(format!("/tmp/{}", spec.code_path), code.as_bytes())
             .await?;
 
-        log::info!("{} starting", container.as_log());
+        tracing::info!("{} starting", container.as_log());
         container.start().await?;
 
         async fn stop_container(container: &shiplift::Container<'_>) {
@@ -154,11 +165,11 @@ impl DockerRunner {
         let exit = match run_fut.await {
             // Finished successfully within time
             Ok(Ok(exit)) => {
-                log::info!("{} finished", container.as_log());
+                tracing::info!("{} finished", container.as_log());
                 exit
             }
             Ok(Err(_overflowed)) => {
-                log::warn!(
+                tracing::warn!(
                     "{} force-stopping. Reason: overflowed output",
                     container.as_log()
                 );
@@ -167,7 +178,7 @@ impl DockerRunner {
             }
             // Timed out
             Err(_elapsed) => {
-                log::warn!(
+                tracing::warn!(
                     "{} force-stopping. Reason: exceeded timeout",
                     container.as_log()
                 );
@@ -183,7 +194,7 @@ impl DockerRunner {
         container
             .remove(shiplift::RmContainerOptions::builder().force(true).build())
             .await?;
-        log::info!("{} removed", container.as_log());
+        tracing::info!("{} removed", container.as_log());
         Ok(Output {
             status: exit.status_code,
             tty: output_builder.build(),

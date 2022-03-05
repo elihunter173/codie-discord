@@ -20,6 +20,7 @@ use crate::{
     runner::{DockerRunner, UnrecognizedContainer},
 };
 
+#[derive(Debug)]
 pub struct MessageIds(Tree);
 
 // TODO: There's some duplicated code, maybe use traits to make it generic?
@@ -45,6 +46,7 @@ impl MessageIds {
 
 // TODO: Do I want to react to message when I send them?
 
+#[derive(Debug)]
 pub struct Handler {
     pub language_text: Box<str>,
     pub runner: DockerRunner,
@@ -84,7 +86,7 @@ async fn try_run_raw(runner: &DockerRunner, msg: &str, tx: Sender<String>) {
         ($($arg:tt)*) => ( return send!($($arg)*) )
     }
 
-    log::debug!("Responding to {:#?}", msg);
+    tracing::debug!("Responding to {:#?}", msg);
     let run = match parse_message(msg) {
         Some(run) => run,
         None => bail!(
@@ -111,7 +113,7 @@ print('Hello World')
         Err(err) => bail!("{}", err),
     };
 
-    log::debug!("{:?}", run);
+    tracing::debug!("{:?}", run);
     let lang_ref = match runner.get_lang_by_code(run.lang) {
         Some(lang) => lang,
         // TODO: Get suggestions using strsim
@@ -162,7 +164,7 @@ impl EventHandler for Handler {
             .await
             .expect("failed to get handle on message");
 
-        log::trace!("Received edited message: {:#?}", msg);
+        tracing::trace!("Received edited message: {:#?}", msg);
 
         if msg.is_own(&ctx).await {
             return;
@@ -215,7 +217,7 @@ impl EventHandler for Handler {
     }
 
     async fn message(&self, ctx: Context, msg: Message) {
-        log::trace!("Received new message: {:#?}", msg);
+        tracing::trace!("Received new message: {:#?}", msg);
 
         if msg.is_own(&ctx).await {
             return;
