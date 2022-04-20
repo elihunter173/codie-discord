@@ -95,7 +95,7 @@ impl Language for Sh {
             image_name: "sh".to_owned(),
             code_path: "run.sh",
             dockerfile: r#"
-FROM alpine:3.13
+FROM alpine:3.15
 CMD ["sh", "run.sh"]
 "#
             .to_owned(),
@@ -113,7 +113,7 @@ impl Language for Bash {
             image_name: "bash".to_owned(),
             code_path: "run.sh",
             dockerfile: r#"
-FROM alpine:3.13
+FROM alpine:3.15
 RUN apk add --no-cache bash
 CMD ["bash", "run.sh"]
 "#
@@ -132,7 +132,7 @@ impl Language for Zsh {
             image_name: "zsh".to_owned(),
             code_path: "run.sh",
             dockerfile: r#"
-FROM alpine:3.13
+FROM alpine:3.15
 RUN apk add --no-cache zsh
 CMD ["zsh", "run.sh"]
 "#
@@ -164,9 +164,9 @@ make_lang!(Python);
 impl Language for Python {
     CODES!["python", "py", "gyp"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
-        bind_opts!(opts => { version or "3.9", bundle or "scipy" });
+        bind_opts!(opts => { version or "3", bundle or "scipy" });
         match version.as_str() {
-            "3.9" | "3.8" | "3.7" | "3.6" => (),
+            "3" | "3.10" | "3.9" | "3.8" | "3.7" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
         let pip_install = match bundle.as_str() {
@@ -175,7 +175,7 @@ impl Language for Python {
             _ => return Err(OptionsError::UnknownValue(bundle)),
         };
         Ok(RunSpec {
-            image_name: format!("python{}-{}", version, bundle),
+            image_name: format!("python-{}-{}", version, bundle),
             code_path: "run.py",
             dockerfile: format!(
                 r#"
@@ -184,8 +184,6 @@ ENV PYTHONUNBUFFERED=1
 {pip_install}
 CMD ["python", "run.py"]
 "#,
-                version = version,
-                pip_install = pip_install,
             ),
         })
     }
@@ -196,20 +194,19 @@ make_lang!(JavaScript);
 impl Language for JavaScript {
     CODES!["javascript", "js", "jsx"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
-        bind_opts!(opts => { version or "15" });
+        bind_opts!(opts => { version or "current" });
         match version.as_str() {
-            "15" | "14" | "12" | "10" => (),
+            "current" | "17" | "16" | "15" | "14" | "12" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
         Ok(RunSpec {
-            image_name: format!("nodejs{}", version),
+            image_name: format!("nodejs-{}", version),
             code_path: "index.js",
             dockerfile: format!(
                 r#"
 FROM node:{version}-alpine
 CMD ["node", "index.js"]
 "#,
-                version = version,
             ),
         })
     }
@@ -272,8 +269,8 @@ CMD ["perl", "run.pl"]
 }
 test_lang!(Perl, "print 'Hello, World!\n'");
 
-make_lang!(PHP);
-impl Language for PHP {
+make_lang!(Php);
+impl Language for Php {
     CODES!["php", "php3", "php4", "php5", "php6", "php7", "php8"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
         bind_opts!(opts => {});
@@ -288,27 +285,26 @@ CMD ["php", "run.php"]
         })
     }
 }
-test_lang!(PHP, "<?php echo 'Hello, World!\n' ?>");
+test_lang!(Php, "<?php echo 'Hello, World!\n' ?>");
 
 make_lang!(Ruby);
 impl Language for Ruby {
     CODES!["ruby", "rb", "gemspec", "podspec", "thor", "irb"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
         // TODO: Support JRuby
-        bind_opts!(opts => { version or "3.0" });
+        bind_opts!(opts => { version or "3" });
         match version.as_str() {
-            "3.0" | "2.7" | "2.6" | "2.5" => (),
+            "3" | "3.1" | "3.0" | "2.7" | "2.6" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
         Ok(RunSpec {
-            image_name: format!("ruby{}", version),
+            image_name: format!("ruby-{}", version),
             code_path: "run.rb",
             dockerfile: format!(
                 r#"
 FROM ruby:{version}-alpine
 CMD ["ruby", "run.rb"]
 "#,
-                version = version
             ),
         })
     }
@@ -326,7 +322,7 @@ impl Language for Lua {
             _ => return Err(OptionsError::UnknownValue(version)),
         };
         Ok(RunSpec {
-            image_name: format!("lua{}", version),
+            image_name: format!("lua-{}", version),
             code_path: "run.lua",
             dockerfile: format!(
                 r#"
@@ -334,7 +330,6 @@ FROM alpine:edge
 RUN apk add --no-cache lua{version}
 CMD ["lua{version}", "run.lua"]
 "#,
-                version = version
             ),
         })
     }
@@ -345,20 +340,19 @@ make_lang!(Julia);
 impl Language for Julia {
     CODES!["julia", "julia-repl"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
-        bind_opts!(opts => { version or "1.6" });
+        bind_opts!(opts => { version or "1" });
         match version.as_str() {
-            "1.6" | "1.5" | "1.0" => (),
+            "1" | "1.7" | "1.6" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
         Ok(RunSpec {
-            image_name: format!("julia{}", version),
+            image_name: format!("julia-{}", version),
             code_path: "run.jl",
             dockerfile: format!(
                 r#"
 FROM julia:{version}
 CMD ["julia", "run.jl"]
 "#,
-                version = version
             ),
         })
     }
@@ -387,13 +381,13 @@ make_lang!(Go);
 impl Language for Go {
     CODES!["go", "golang"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
-        bind_opts!(opts => { version or "1.16" });
+        bind_opts!(opts => { version or "1" });
         match version.as_str() {
-            "1.16" | "1.15" => (),
+            "1" | "1.18" | "1.17" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
         Ok(RunSpec {
-            image_name: format!("golang{}", version),
+            image_name: format!("golang-{}", version),
             code_path: "main.go",
             dockerfile: format!(
                 r#"
@@ -402,7 +396,6 @@ FROM golang:{version}-alpine
 ENV GOCACHE=/tmp/.cache/go
 CMD ["go", "run", "main.go"]
 "#,
-                version = version
             ),
         })
     }
@@ -421,13 +414,13 @@ make_lang!(Java);
 impl Language for Java {
     CODES!["java", "jsp"];
     fn run_spec(&self, opts: Options) -> Result<RunSpec, OptionsError> {
-        bind_opts!(opts => { version or "15" });
+        bind_opts!(opts => { version or "17" });
         match version.as_str() {
-            "17" | "16" | "15" | "11" | "8" => (),
+            "19" | "18" | "17" | "11" | "8" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
         Ok(RunSpec {
-            image_name: format!("java-openjdk{}", version),
+            image_name: format!("java-openjdk-{}", version),
             code_path: "code",
             dockerfile: format!(
                 r#"
@@ -437,7 +430,6 @@ CMD sh -c \
     'class=$(sed -n "s/public\s\+class\s\+\(\w\+\).*/\1/p" code); \
      ln -s code $class.java && javac $class.java && java $class'
 "#,
-                version = version
             ),
         })
     }
@@ -505,7 +497,6 @@ impl Language for Groovy {
 FROM groovy:{version}-jre11
 CMD ["groovy", "run.groovy"]
 "#,
-                version = version,
             ),
         })
     }
@@ -542,20 +533,20 @@ make_lang!(Swift);
 impl Language for Swift {
     CODES!["swift"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
-        bind_opts!(opts => { version or "5.3" });
+        bind_opts!(opts => { version or "5.6" });
         match version.as_str() {
-            "5.3" | "5.2" | "5.1" => (),
+            "5.6" | "5.5" | "5.4" | "5.3" | "5.2" | "5.1" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         };
         Ok(RunSpec {
-            image_name: format!("swift{}", version),
+            image_name: format!("swift-{}", version),
             code_path: "main.swift",
             dockerfile: format!(
                 r#"
 FROM swift:{version}
+ENV XDG_CACHE_HOME=/tmp/.cache
 CMD ["swift", "main.swift" ]
 "#,
-                version = version,
             ),
         })
     }
@@ -650,20 +641,19 @@ make_lang!(Erlang);
 impl Language for Erlang {
     CODES!["erlang", "erl"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
-        bind_opts!(opts => { version or "23" });
+        bind_opts!(opts => { version or "24" });
         match version.as_str() {
-            "24" | "23" | "22" | "21" | "20" | "19" | "18" => (),
+            "25" | "24" | "23" | "22" | "21" | "20" | "19" | "18" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         }
         Ok(RunSpec {
-            image_name: format!("erlang{}", version),
+            image_name: format!("erlang-{}", version),
             code_path: "main.erl",
             dockerfile: format!(
                 r#"
 FROM erlang:{version}-alpine
 CMD ["escript", "main.erl"]
 "#,
-                version = version
             ),
         })
     }
@@ -680,20 +670,19 @@ make_lang!(Elixir);
 impl Language for Elixir {
     CODES!["elixir"];
     fn run_spec(&self, opts: Options) -> anyhow::Result<RunSpec, OptionsError> {
-        bind_opts!(opts => { version or "1.11" });
+        bind_opts!(opts => { version or "1.13" });
         match version.as_str() {
-            "1.11" | "1.10" | "1.9" | "1.8" | "1.7" | "1.6" => (),
+            "1.13" | "1.12" | "1.11" | "1.10" | "1.9" | "1.8" | "1.7" | "1.6" => (),
             _ => return Err(OptionsError::UnknownValue(version)),
         }
         Ok(RunSpec {
-            image_name: format!("elixir{}", version),
+            image_name: format!("elixir-{}", version),
             code_path: "run.exs",
             dockerfile: format!(
                 r#"
 FROM elixir:{version}-alpine
 CMD ["elixir", "run.exs"]
 "#,
-                version = version,
             ),
         })
     }
