@@ -2,7 +2,8 @@
 name = "codie-discord"
 version = "0.1.0"
 authors = ["Eli W. Hunter <elihunter173@gmail.com>"]
-edition = "2018"
+edition = "2021"
+
 [dependencies]
 anyhow = "1"
 futures = "0.3"

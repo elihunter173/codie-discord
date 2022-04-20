@@ -43,7 +43,7 @@ async fn main() {
         // all spans/events with a level higher than TRACE (e.g, debug, info, warn, etc.)
         // will be written to stdout.
         .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or(EnvFilter::new(conf.log_filter)),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(conf.log_filter)),
         )
         // completes the builder.
         .finish();
