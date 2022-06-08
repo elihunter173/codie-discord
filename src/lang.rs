@@ -73,11 +73,11 @@ macro_rules! CODES {
 }
 
 macro_rules! bind_opts {
-    ( $map:expr => {$( $vars:ident $(or $default:literal)? ),*$(,)?} ) => (
+    ( $map:expr => {$( $vars:ident or $default:literal ),*$(,)?} ) => (
         #[allow(unused_parens, unused_mut)]
         let ($($vars),*) = {
             let mut m = $map;
-            let tup = ($( m.remove(stringify!($vars)) $(.unwrap_or(String::from($default)))? ),*);
+            let tup = ($( m.remove(stringify!($vars)).unwrap_or_else(|| String::from($default)) ),*);
             if !m.is_empty() {
                 return Err(OptionsError::UnknownKeys(m.keys().map(|&s| s.to_owned()).collect()));
             }
